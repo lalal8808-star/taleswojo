@@ -54,33 +54,32 @@ const LESSON_PRESETS = [
   "자연과 생명을 아끼고 사랑하기"
 ];
 
-// Premium Curated Unsplash Bedtime Storybook Illustrations classified by interests
-// to guarantee 100% rendering visual beauty without any delay
+// Curated high-fidelity illustration URLs to instantly render beautiful artwork
 const THEME_FALLBACKS = {
   space: [
-    "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80", // Dreamy pastel cosmic moon
-    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80", // Magic stardust train
+    "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80", // Cosmic crescent
+    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80", // Dreamy stars
     "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80"  // Whimsical galaxy ship
   ],
   forest: [
-    "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&auto=format&fit=crop&q=80", // Fairy tale green forest
-    "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&auto=format&fit=crop&q=80", // Soft magical giant trees
-    "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80"  // Cozy woodland clearing
+    "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&auto=format&fit=crop&q=80", // Deep magic wood
+    "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&auto=format&fit=crop&q=80", // Cozy giant trees
+    "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80"  // Magical meadow
   ],
   toy: [
-    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=800&auto=format&fit=crop&q=80", // Colorful cute baby playroom
-    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=800&auto=format&fit=crop&q=80", // Warm nostalgic teddy bear bedroom
-    "https://images.unsplash.com/photo-1566577134770-3d85bb3a9cc4?w=800&auto=format&fit=crop&q=80"  // Adorable tiny block castle
+    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=800&auto=format&fit=crop&q=80", // Block castle
+    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=800&auto=format&fit=crop&q=80", // Cozy teddy bear room
+    "https://images.unsplash.com/photo-1566577134770-3d85bb3a9cc4?w=800&auto=format&fit=crop&q=80"  // Magic playroom
   ],
   sea: [
-    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80", // Golden cozy sandy dream beach
-    "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80", // Cozy sea sunset pastel
-    "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800&auto=format&fit=crop&q=80"  // Glowing turquoise coral waters
+    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80", // Golden sands
+    "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80", // Dream sunset
+    "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800&auto=format&fit=crop&q=80"  // Secret coral paradise
   ],
   default: [
-    "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Magical golden stars
-    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80", // Deep magic crescent moon
-    "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?w=800&auto=format&fit=crop&q=80"  // Whimsical glowing plant leaf
+    "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Glowing stardust
+    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80", // Crescent moon
+    "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?w=800&auto=format&fit=crop&q=80"  // Green forest leaf
   ]
 };
 
@@ -155,25 +154,27 @@ export default function Home() {
     };
   }, [isLoading]);
 
-  // ULTRA POWERFUL 3-SECOND TIMEOUT FOR INSTANT ILLUST LOADING
-  // Bypasses any network pending/latency in Pollinations AI to guarantee the child immediately sees beautiful illustrations!
+  // BUG FIX: Watchdog timer correctly triggers failover AND clears the pending loader state immediately!
   useEffect(() => {
     if (activeStory && activeStory.pages[currentPageIndex]) {
       const pageKey = `${activeStory.title}-${currentPageIndex}`;
       
-      // Clear previous timeout if any
       if (imageTimeoutTimerRef.current) {
         clearTimeout(imageTimeoutTimerRef.current);
       }
       
-      // Start a 3-second watchdog timer. If the image is not fully loaded by then,
-      // we immediately switch to a gorgeous themed Unsplash illustration
+      // If the image hasn't loaded in 2.5 seconds, force switch to premium fallback and disable loader
       imageTimeoutTimerRef.current = setTimeout(() => {
         if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
-          console.warn(`[Watchdog] Pollinations AI load timeout for ${pageKey}. Force switching to themed fallback.`);
-          handleImageError(pageKey);
+          console.warn(`[Watchdog Timeout] Image taking too long for ${pageKey}. Swapping to Unsplash.`);
+          
+          // 1. Force the image error state so src points to backup Unsplash immediately
+          setImageErrors(prev => ({ ...prev, [pageKey]: true }));
+          
+          // 2. IMMEDIATELY set the image as loaded so the loading spinner vanishes and shows the themed fallback
+          setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         }
-      }, 3000); // 3 seconds is optimal: long enough for fast CDN caches, short enough for child patience
+      }, 2500); 
     }
 
     return () => {
@@ -181,7 +182,7 @@ export default function Home() {
         clearTimeout(imageTimeoutTimerRef.current);
       }
     };
-  }, [currentPageIndex, activeStory, loadedImages]);
+  }, [currentPageIndex, activeStory, loadedImages, imageErrors]);
 
   // Mount setup
   useEffect(() => {
@@ -238,7 +239,7 @@ export default function Home() {
     }
   }, []);
 
-  // Smart Context-Aware Themed Fallback selector
+  // Theme Fallback selection based on interests keywords
   const getThemeFallbackUrl = (pageNum: number) => {
     const curInterest = interest.toLowerCase();
     let themeKey: 'space' | 'forest' | 'toy' | 'sea' | 'default' = 'default';
@@ -281,8 +282,9 @@ export default function Home() {
   };
 
   const handleImageError = (key: string) => {
-    console.warn(`[Image Failover] Illustration loading failed for key ${key}. Instantly displaying high-speed beautiful themed background.`);
+    console.warn(`[Image Failover] Illustration loading failed for key ${key}. Swapping to themed Unsplash URL.`);
     setImageErrors(prev => ({ ...prev, [key]: true }));
+    setLoadedImages(prev => ({ ...prev, [key]: true })); // Resolve loading spinner instantly!
   };
 
   // Generate fairy tale
@@ -870,6 +872,7 @@ export default function Home() {
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
+                        key={currentImageUrl}
                         src={currentImageUrl} 
                         alt="Bedtime story illustration"
                         style={{
