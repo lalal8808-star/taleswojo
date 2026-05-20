@@ -32,7 +32,7 @@ interface StoryHistoryItem {
   interest: string;
   lesson: string;
   title: string;
-  pages: StoryPage[]; // Structured pages with illustration prompts
+  pages: StoryPage[];
   date: string;
 }
 
@@ -54,37 +54,41 @@ const LESSON_PRESETS = [
   "자연과 생명을 아끼고 사랑하기"
 ];
 
+// Beautiful magical fallback illustrations from Unsplash (children's fantasy nighttime aesthetics)
+const FALLBACK_ILLUSTRATIONS = [
+  "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80", // Cozy pastel dream stars
+  "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80", // Whimsical stardust trail
+  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Deep cosmic magic gold
+  "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80", // Soft pink aurora dreamland
+  "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80"  // Magical moon glowing purple
+];
+
 export default function Home() {
-  // Input fields state
   const [name, setName] = useState('');
   const [interest, setInterest] = useState('');
   const [lesson, setLesson] = useState('');
   
-  // Custom generated stars for the night sky background
   const [stars, setStars] = useState<{ id: number; left: string; top: string; sizeClass: string; delay: string }[]>([]);
-  
-  // Saved history of fairy tales
   const [history, setHistory] = useState<StoryHistoryItem[]>([]);
   
-  // Voice synthesis states (TTS)
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [speechRate, setSpeechRate] = useState(0.85); // Cozy slow speed
+  const [speechRate, setSpeechRate] = useState(0.85);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   
-  // Book state
   const [activeStory, setActiveStory] = useState<{ title: string; pages: StoryPage[] } | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [imageLoading, setImageLoading] = useState(false);
   
-  // Abort controller for canceling stream/generation
+  // High-fidelity image load state system
+  const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  
   const abortControllerRef = useRef<AbortController | null>(null);
   const isSpeakingRef = useRef(false);
   const currentPageIndexRef = useRef(0);
 
-  // Synced refs for TTS callback closures
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
   }, [isSpeaking]);
@@ -93,7 +97,7 @@ export default function Home() {
     currentPageIndexRef.current = currentPageIndex;
   }, [currentPageIndex]);
 
-  // Generate stars on mount
+  // Stars and history loading
   useEffect(() => {
     const starList = Array.from({ length: 80 }).map((_, idx) => {
       const left = `${Math.random() * 100}%`;
@@ -104,14 +108,10 @@ export default function Home() {
     });
     setStars(starList);
 
-    // Load history from localStorage
     const saved = localStorage.getItem('tales_history');
     if (saved) {
       try {
         const parsedHistory = JSON.parse(saved);
-        
-        // Data Adapter for Backward Compatibility:
-        // Convert old flat-text history items to structured pages
         const migratedHistory = parsedHistory.map((item: any) => {
           if (!item.pages) {
             const paragraphs = item.body ? item.body.split('\n\n').filter((p: string) => p.trim().length > 0) : [];
@@ -132,14 +132,12 @@ export default function Home() {
           }
           return item;
         });
-
         setHistory(migratedHistory);
       } catch (e) {
         console.error(e);
       }
     }
 
-    // Load voices
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       const loadVoices = () => {
         const voiceList = window.speechSynthesis.getVoices();
@@ -149,25 +147,38 @@ export default function Home() {
           setSelectedVoice(koVoices[0]);
         }
       };
-      
       loadVoices();
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
   }, []);
 
-  // Pollinations.ai free high-quality child watercolor style generator
+  // Compute absolute URL for each page's illustration
   const getIllustrationUrl = (prompt: string, pageNum: number) => {
-    if (!prompt) return '';
-    // Inject ultra high quality whimsical watercolor children book style parameters
-    const stylePrefix = "whimsical cute children's book illustration, beautiful soft watercolor pastel style, magical bedtime story aesthetic, clear warm bright cozy colors, adorable, extremely detailed, no words, no text, no letters, no writing, no watermark";
+    if (!prompt) return FALLBACK_ILLUSTRATIONS[pageNum % FALLBACK_ILLUSTRATIONS.length];
+    
+    // Check if we already registered an error for this page's prompt
+    const uniqueKey = `${activeStory?.title || 'story'}-${pageNum}`;
+    if (imageErrors[uniqueKey]) {
+      return FALLBACK_ILLUSTRATIONS[pageNum % FALLBACK_ILLUSTRATIONS.length];
+    }
+    
+    const stylePrefix = "whimsical children book illustration, beautiful soft watercolor pastel style, bedtime story aesthetic, cozy warm colors, adorable, extremely detailed, no words, no text, no letters";
     const fullPrompt = `${stylePrefix}, ${prompt}`;
     
-    // Using pageNum + title as seed to ensure a persistent, highly unique but consistent picture per page
     const seed = 1000 + pageNum * 250 + (activeStory?.title.length || 0);
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}`;
   };
 
-  // Generate structured story using Gemini & LM studio
+  const handleImageLoad = (key: string) => {
+    setLoadedImages(prev => ({ ...prev, [key]: true }));
+  };
+
+  const handleImageError = (key: string) => {
+    console.warn(`Illustration loading failed for key ${key}. Triggering cozy fallback watercolor background.`);
+    setImageErrors(prev => ({ ...prev, [key]: true }));
+  };
+
+  // Generate fairy tale
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return alert('아이의 이름을 입력해 주세요.');
@@ -178,6 +189,8 @@ export default function Home() {
     setIsLoading(true);
     setActiveStory(null);
     setCurrentPageIndex(0);
+    setLoadedImages({});
+    setImageErrors({});
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -198,20 +211,16 @@ export default function Home() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || '동화를 지어내는 데 실패했어요. LM Studio가 작동하는지 확인해 주세요.');
+        throw new Error(errData.error || '동화를 짓는 중 서버 지연이 발생했습니다.');
       }
 
-      // Read final JSON object returned from server
       const data = await response.json();
-      
       if (!data.pages || data.pages.length === 0) {
-        throw new Error('구조화된 동화 데이터를 받지 못했습니다.');
+        throw new Error('올바른 동화 데이터 규격을 수신하지 못했습니다.');
       }
 
-      // Successfully generated book
       setActiveStory(data);
 
-      // Save to history
       const newStory: StoryHistoryItem = {
         id: Date.now().toString(),
         name: name.trim(),
@@ -246,7 +255,6 @@ export default function Home() {
     }
   };
 
-  // Navigations
   const handleNextPage = () => {
     if (!activeStory) return;
     if (currentPageIndex < activeStory.pages.length - 1) {
@@ -262,28 +270,24 @@ export default function Home() {
     }
   };
 
-  // TTS Audio Player (Automatic page turner)
+  // TTS Narrator
   const handleStartSpeaking = () => {
     if (!activeStory || typeof window === 'undefined') return;
-
     if (isSpeaking && isPaused) {
       window.speechSynthesis.resume();
       setIsPaused(false);
       return;
     }
-
     speakCurrentPage();
   };
 
   const speakCurrentPage = () => {
     if (!activeStory || typeof window === 'undefined') return;
-    
     window.speechSynthesis.cancel();
 
     const page = activeStory.pages[currentPageIndexRef.current];
     let textToRead = '';
     
-    // On the first page, announce the title for immersion
     if (currentPageIndexRef.current === 0) {
       textToRead = `오늘의 동화 제목, ${activeStory.title}. `;
     }
@@ -303,10 +307,8 @@ export default function Home() {
     }
 
     utterance.onend = () => {
-      // Auto page turner logic
       const nextIndex = currentPageIndexRef.current + 1;
       if (nextIndex < activeStory.pages.length) {
-        // Automatically flip page and read next page after 1.5s cozy pause
         setTimeout(() => {
           if (isSpeakingRef.current) {
             setCurrentPageIndex(nextIndex);
@@ -359,6 +361,8 @@ export default function Home() {
       pages: item.pages
     });
     setCurrentPageIndex(0);
+    setLoadedImages({});
+    setImageErrors({});
     
     const bookEl = document.getElementById('storybook');
     if (bookEl) {
@@ -373,16 +377,18 @@ export default function Home() {
     localStorage.setItem('tales_history', JSON.stringify(updated));
   };
 
-  // Preset selectors
   const handleSelectPresetInterest = (preset: string) => setInterest(preset);
   const handleSelectPresetLesson = (preset: string) => setLesson(preset);
 
   const activePage = activeStory?.pages[currentPageIndex];
   const totalPages = activeStory?.pages.length || 0;
+  const imageKey = activeStory ? `${activeStory.title}-${currentPageIndex}` : '';
+  const isImageLoaded = loadedImages[imageKey] || false;
+  const currentImageUrl = activePage ? getIllustrationUrl(activePage.illustrationPrompt, activePage.pageNumber) : '';
 
   return (
     <div className="relative min-h-screen pb-20">
-      {/* Stars Sky Background */}
+      {/* Background stars */}
       <div className="night-sky">
         {stars.map((star) => (
           <div
@@ -399,13 +405,12 @@ export default function Home() {
       </div>
 
       <div className="app-container">
-        {/* Header */}
         <header className="app-header">
           <h1 className="app-title">달콤한 꿈나라 🌙</h1>
           <p className="app-subtitle">매일 밤 우리 아이에게 들려주는 세상 하나뿐인 그림 동화책</p>
         </header>
 
-        {/* Form panel */}
+        {/* Inputs panel */}
         <section className="form-card glass-panel">
           <h2 className="input-label" style={{ fontSize: '1.6rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
             <Sparkles className="text-secondary" size={24} /> 
@@ -521,7 +526,7 @@ export default function Home() {
           </form>
         </section>
 
-        {/* Right side: Magical Book panel */}
+        {/* Book View panel */}
         <section id="storybook" className="book-panel glass-panel" style={{ padding: '30px' }}>
           {isLoading ? (
             <div className="story-placeholder">
@@ -625,7 +630,7 @@ export default function Home() {
                   aspectRatio: '4/3',
                   borderRadius: '16px',
                   overflow: 'hidden',
-                  background: 'rgba(0, 0, 0, 0.3)',
+                  background: 'linear-gradient(135deg, #1e1b4b, #311042)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                   boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                   display: 'flex',
@@ -636,27 +641,37 @@ export default function Home() {
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
-                        src={getIllustrationUrl(activePage.illustrationPrompt, activePage.pageNumber)} 
+                        src={currentImageUrl} 
                         alt="Bedtime story illustration"
                         style={{
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover',
-                          opacity: imageLoading ? 0.3 : 1,
-                          transition: 'opacity 0.5s ease-in-out'
+                          opacity: isImageLoaded ? 1 : 0.05,
+                          transition: 'opacity 0.6s ease-in-out'
                         }}
-                        onLoadStart={() => setImageLoading(true)}
-                        onLoad={() => setImageLoading(false)}
+                        onLoad={() => handleImageLoad(imageKey)}
+                        onError={() => handleImageError(imageKey)}
                       />
-                      {imageLoading && (
-                        <div style={{ position: 'absolute', color: 'var(--color-secondary)', fontSize: '0.9rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <RefreshCw className="animate-spin" size={16} />
-                          그림을 그리는 중...
+                      
+                      {/* Magical soft glowing loader until loaded */}
+                      {!isImageLoaded && (
+                        <div style={{ 
+                          position: 'absolute', 
+                          color: 'var(--color-secondary)', 
+                          fontSize: '0.9rem', 
+                          display: 'flex', 
+                          flexDirection: 'column',
+                          gap: '12px', 
+                          alignItems: 'center' 
+                        }}>
+                          <RefreshCw className="animate-spin text-secondary" size={24} />
+                          <span className="animate-pulse" style={{ fontFamily: 'var(--font-title)' }}>밤별빛으로 도화지 채우는 중...</span>
                         </div>
                       )}
                     </>
                   ) : (
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>일러스트가 비어 있습니다.</div>
+                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>일러스트를 기획하지 못했습니다.</div>
                   )}
                 </div>
 
@@ -729,7 +744,7 @@ export default function Home() {
           )}
         </section>
 
-        {/* Bottom Section: Story History Vault */}
+        {/* History section */}
         <section className="history-section">
           <h2 className="history-title">
             <History className="text-secondary" size={24} />

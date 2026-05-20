@@ -16,19 +16,29 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
 
-// Helper function to remove Korean characters from the illustration prompt
-// to guarantee Pollinations.ai API compatibility (avoids broken image Xbox error)
+// Helper function to optimize and clean illustration prompts for maximum compatibility with Pollinations.ai
 function sanitizeIllustrationPrompt(prompt: string): string {
-  if (!prompt) return 'magical whimsical cozy bedroom with glowing stars';
+  if (!prompt) return 'cute child exploring magical stars';
   
-  // Remove Korean characters completely to prevent URL/API query breakages
-  const sanitized = prompt.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
+  // 1. Remove Korean characters completely
+  let clean = prompt.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
   
-  // If the prompt became empty or too short after removing Korean, fallback to safe dreamy defaults
-  if (sanitized.length < 5) {
-    return 'magical dreamy kid adventure with stars and glowing light';
+  // 2. Remove problematic special symbols, quotes, and excessive punctuations
+  clean = clean.replace(/["'\\“”]/g, '');
+  clean = clean.replace(/\s+/g, ' ');
+  
+  // 3. Shorten extremely long descriptions to avoid URL/query size limits in free image generation APIs
+  const words = clean.split(' ');
+  if (words.length > 25) {
+    clean = words.slice(0, 22).join(' ');
   }
-  return sanitized;
+  
+  // 4. Ensure it has safe keywords if result is too small or blank
+  if (clean.length < 5) {
+    return 'magical child in beautiful glowing fantasy space adventure';
+  }
+  
+  return clean.trim();
 }
 
 export async function POST(req: Request) {
@@ -84,7 +94,7 @@ export async function POST(req: Request) {
             pages: z.array(z.object({
               pageNumber: z.number().describe('1부터 시작하는 페이지 번호'),
               text: z.string().describe('해당 페이지에 배치될 한국어 동화 본문 텍스트'),
-              illustrationPrompt: z.string().describe('이 페이지의 묘사에 어울리는 극상의 영어 이미지 생성 프롬프트. 한글 단어 절대 금지, 오직 영어로만 작성.')
+              illustrationPrompt: z.string().describe('이 페이지의 묘사에 어울리는 극상의 간단명료한 영어 이미지 생성 프롬프트. 한글 금지, 오직 영어만.')
             })).describe('기승전결에 맞추어 분할된 3~5개의 동화 페이지들')
           }),
           prompt: `당신은 세계 최고의 아동 그림 동화책 기획자입니다.
@@ -95,19 +105,19 @@ export async function POST(req: Request) {
 ${rawStoryText}
 
 [삽화 프롬프트 작성 지침]
-1. 영문 프롬프트에는 장면의 인물, 배경, 행동 위주로 구체적으로 묘사하세요.
+1. 영문 프롬프트에는 장면의 인물, 배경, 행동 위주로 구체적이되 핵심 명사형 위주로 간단하고 콤팩트하게 작성하세요 (20단어 미만 권장).
 2. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 프롬프트를 작성해 주세요.
 3. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 함을 강조하세요.
 4. 그림체나 예술 화풍 스타일은 나중에 일관되게 덧붙일 것이므로, 프롬프트 내부에는 "장면의 구체적인 비주얼 묘사"에만 집중해 영문으로 작성해 주세요.`,
         });
 
-        // Robust sanitize: sanitize all prompts just in case Gemini accidentally sneaks Korean in
+        // Clean & sanitize all prompts
         const sanitizedPages = result.object.pages.map(page => ({
           ...page,
           illustrationPrompt: sanitizeIllustrationPrompt(page.illustrationPrompt)
         }));
 
-        console.log('[2/2] Hybrid generation with Gemini complete! Sending structured JSON.');
+        console.log('[2/2] Hybrid generation complete!');
         return new Response(JSON.stringify({
           title: result.object.title,
           pages: sanitizedPages
@@ -117,12 +127,11 @@ ${rawStoryText}
         });
       } catch (geminiError: any) {
         console.error('Failed to segment story using Gemini 3.5 Flash. Falling back to local segmenter...', geminiError);
-        // If Gemini fails, we go to fallback
       }
     }
 
-    // FALLBACK: If Gemini API key is missing or failed, use local parser & generation
-    console.log('[2/2] [FALLBACK] Segmenting story locally using rule-based paragraph divider...');
+    // FALLBACK: If Gemini API key is missing or failed
+    console.log('[2/2] [FALLBACK] Segmenting story locally...');
     
     const lines = rawStoryText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     let title = `${name}의 꿈나라 여행`;
@@ -148,14 +157,12 @@ ${rawStoryText}
     const pagesCount = Math.min(5, Math.max(3, paragraphs.length));
     const pages = [];
 
-    // Formulate a beautiful, 100% pure English prompt matching the topic to avoid any broken images
-    const englishInterestKey = interest.toLowerCase().includes('space') || interest.toLowerCase().includes('우주') ? 'space adventure rocket' : 'dreamy magical landscape';
+    // Simple robust keywords for child
+    const safeTopicKeyword = interest.toLowerCase().includes('space') || interest.toLowerCase().includes('우주') ? 'space spaceship starlight' : 'magical fairy forest animal';
     
     for (let i = 0; i < pagesCount; i++) {
       const pageText = paragraphs[i] || '오늘 밤도 깊은 행복 속에서 별빛 이불을 덮고 예쁜 꿈을 꿉니다.';
-      
-      // Strict pure English prompts for fallback mode to guarantee image rendering
-      const promptDescription = `A lovely adorable child experiencing a dreamy fantasy bedroom adventure of ${englishInterestKey} surrounded by sparkling stars, warm moonlight, clouds, beautiful magic light`;
+      const promptDescription = `cute lovely child exploring dreamy magic ${safeTopicKeyword} with glowing stars and moon`;
       
       pages.push({
         pageNumber: i + 1,
@@ -169,7 +176,6 @@ ${rawStoryText}
       pages
     };
 
-    console.log('[Fallback] Local segmenter finished. Sending fallback JSON.');
     return new Response(JSON.stringify(fallbackResponse), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
@@ -179,7 +185,7 @@ ${rawStoryText}
     console.error('Error generating story:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to generate story. Please verify LM Studio is running on http://localhost:1234.',
+        error: 'Failed to generate story. Please verify LM Studio is running.',
         details: error.message 
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
