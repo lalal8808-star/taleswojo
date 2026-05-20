@@ -54,13 +54,35 @@ const LESSON_PRESETS = [
   "자연과 생명을 아끼고 사랑하기"
 ];
 
-const FALLBACK_ILLUSTRATIONS = [
-  "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80"
-];
+// Premium Curated Unsplash Bedtime Storybook Illustrations classified by interests
+// to guarantee 100% rendering visual beauty without any delay
+const THEME_FALLBACKS = {
+  space: [
+    "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80", // Dreamy pastel cosmic moon
+    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80", // Magic stardust train
+    "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80"  // Whimsical galaxy ship
+  ],
+  forest: [
+    "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&auto=format&fit=crop&q=80", // Fairy tale green forest
+    "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&auto=format&fit=crop&q=80", // Soft magical giant trees
+    "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80"  // Cozy woodland clearing
+  ],
+  toy: [
+    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=800&auto=format&fit=crop&q=80", // Colorful cute baby playroom
+    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=800&auto=format&fit=crop&q=80", // Warm nostalgic teddy bear bedroom
+    "https://images.unsplash.com/photo-1566577134770-3d85bb3a9cc4?w=800&auto=format&fit=crop&q=80"  // Adorable tiny block castle
+  ],
+  sea: [
+    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80", // Golden cozy sandy dream beach
+    "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80", // Cozy sea sunset pastel
+    "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800&auto=format&fit=crop&q=80"  // Glowing turquoise coral waters
+  ],
+  default: [
+    "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Magical golden stars
+    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80", // Deep magic crescent moon
+    "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?w=800&auto=format&fit=crop&q=80"  // Whimsical glowing plant leaf
+  ]
+};
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -80,7 +102,6 @@ export default function Home() {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Magical Real-Time Stage Tracker to eradicate boring loading times!
   const [loadingStage, setLoadingStage] = useState(1);
   const [loadingSeconds, setLoadingSeconds] = useState(0);
   
@@ -91,6 +112,7 @@ export default function Home() {
   const isSpeakingRef = useRef(false);
   const currentPageIndexRef = useRef(0);
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const imageTimeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
@@ -100,7 +122,7 @@ export default function Home() {
     currentPageIndexRef.current = currentPageIndex;
   }, [currentPageIndex]);
 
-  // Loading Stage and Seconds Tracker
+  // Loading Stage timer
   useEffect(() => {
     if (isLoading) {
       setLoadingSeconds(0);
@@ -109,16 +131,11 @@ export default function Home() {
       loadingTimerRef.current = setInterval(() => {
         setLoadingSeconds(prev => {
           const nextSec = prev + 1;
-          // Step 1: Writing Story (0 ~ 7s)
-          if (nextSec < 7) {
+          if (nextSec < 6) {
             setLoadingStage(1);
-          } 
-          // Step 2: Planning Illustration (7 ~ 11s)
-          else if (nextSec >= 7 && nextSec < 11) {
+          } else if (nextSec >= 6 && nextSec < 9) {
             setLoadingStage(2);
-          } 
-          // Step 3: Coloring canvas (11s+)
-          else {
+          } else {
             setLoadingStage(3);
           }
           return nextSec;
@@ -137,6 +154,34 @@ export default function Home() {
       }
     };
   }, [isLoading]);
+
+  // ULTRA POWERFUL 3-SECOND TIMEOUT FOR INSTANT ILLUST LOADING
+  // Bypasses any network pending/latency in Pollinations AI to guarantee the child immediately sees beautiful illustrations!
+  useEffect(() => {
+    if (activeStory && activeStory.pages[currentPageIndex]) {
+      const pageKey = `${activeStory.title}-${currentPageIndex}`;
+      
+      // Clear previous timeout if any
+      if (imageTimeoutTimerRef.current) {
+        clearTimeout(imageTimeoutTimerRef.current);
+      }
+      
+      // Start a 3-second watchdog timer. If the image is not fully loaded by then,
+      // we immediately switch to a gorgeous themed Unsplash illustration
+      imageTimeoutTimerRef.current = setTimeout(() => {
+        if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
+          console.warn(`[Watchdog] Pollinations AI load timeout for ${pageKey}. Force switching to themed fallback.`);
+          handleImageError(pageKey);
+        }
+      }, 3000); // 3 seconds is optimal: long enough for fast CDN caches, short enough for child patience
+    }
+
+    return () => {
+      if (imageTimeoutTimerRef.current) {
+        clearTimeout(imageTimeoutTimerRef.current);
+      }
+    };
+  }, [currentPageIndex, activeStory, loadedImages]);
 
   // Mount setup
   useEffect(() => {
@@ -193,21 +238,42 @@ export default function Home() {
     }
   }, []);
 
+  // Smart Context-Aware Themed Fallback selector
+  const getThemeFallbackUrl = (pageNum: number) => {
+    const curInterest = interest.toLowerCase();
+    let themeKey: 'space' | 'forest' | 'toy' | 'sea' | 'default' = 'default';
+
+    if (curInterest.includes('우주') || curInterest.includes('space') || curInterest.includes('별') || curInterest.includes('은하수')) {
+      themeKey = 'space';
+    } else if (curInterest.includes('숲') || curInterest.includes('동물') || curInterest.includes('공룡') || curInterest.includes('forest') || curInterest.includes('animal')) {
+      themeKey = 'forest';
+    } else if (curInterest.includes('방') || curInterest.includes('장난감') || curInterest.includes('toy') || curInterest.includes('집')) {
+      themeKey = 'toy';
+    } else if (curInterest.includes('바다') || curInterest.includes('섬') || curInterest.includes('물') || curInterest.includes('sea') || curInterest.includes('beach')) {
+      themeKey = 'sea';
+    }
+
+    const fallbacks = THEME_FALLBACKS[themeKey];
+    return fallbacks[pageNum % fallbacks.length];
+  };
+
   // Compute absolute URL
   const getIllustrationUrl = (prompt: string, pageNum: number) => {
-    if (!prompt) return FALLBACK_ILLUSTRATIONS[pageNum % FALLBACK_ILLUSTRATIONS.length];
-    
     const uniqueKey = `${activeStory?.title || 'story'}-${pageNum}`;
+    
+    // If watchdog marked an error or timeout, load themed high-speed Unsplash fallback instantly
     if (imageErrors[uniqueKey]) {
-      return FALLBACK_ILLUSTRATIONS[pageNum % FALLBACK_ILLUSTRATIONS.length];
+      return getThemeFallbackUrl(pageNum);
     }
+    
+    if (!prompt) return getThemeFallbackUrl(pageNum);
     
     const stylePrefix = "whimsical children book illustration, beautiful soft watercolor pastel style, bedtime story aesthetic, cozy warm colors, adorable, extremely detailed, no words, no text, no letters";
     const fullPrompt = `${stylePrefix}, ${prompt}`;
     
     const seed = 1000 + pageNum * 250 + (activeStory?.title.length || 0);
-    // Optimization: using smaller dimension (640x480) for ultrafast loading on all screens, while retaining rich quality
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}`;
+    // Optimized smaller width/height + model=turbo parameters for Pollinations AI to maximize creation speed
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}&model=turbo`;
   };
 
   const handleImageLoad = (key: string) => {
@@ -215,7 +281,7 @@ export default function Home() {
   };
 
   const handleImageError = (key: string) => {
-    console.warn(`Illustration loading failed for key ${key}. Triggering cozy fallback watercolor background.`);
+    console.warn(`[Image Failover] Illustration loading failed for key ${key}. Instantly displaying high-speed beautiful themed background.`);
     setImageErrors(prev => ({ ...prev, [key]: true }));
   };
 
@@ -576,7 +642,6 @@ export default function Home() {
                 마법 동화책이 열리고 있습니다... ({loadingSeconds}초)
               </h3>
               
-              {/* MAGICAL REAL-TIME PROGRESS TIMELINE */}
               <div style={{
                 width: '100%',
                 maxWidth: '450px',
@@ -702,7 +767,7 @@ export default function Home() {
                   left: 0,
                   top: 0,
                   height: '100%',
-                  width: `${Math.min(100, (loadingSeconds / 15) * 100)}%`,
+                  width: `${Math.min(100, (loadingSeconds / 12) * 100)}%`,
                   background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent), var(--color-secondary))',
                   transition: 'width 1s ease'
                 }} />
@@ -801,7 +866,7 @@ export default function Home() {
                   justifyContent: 'center',
                   alignItems: 'center'
                 }}>
-                  {activePage.illustrationPrompt ? (
+                  {activePage.illustrationPrompt || imageErrors[imageKey] ? (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
@@ -811,7 +876,7 @@ export default function Home() {
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover',
-                          opacity: isImageLoaded ? 1 : 0.05,
+                          opacity: isImageLoaded ? 1 : 0.02,
                           transition: 'opacity 0.6s ease-in-out'
                         }}
                         onLoad={() => handleImageLoad(imageKey)}
