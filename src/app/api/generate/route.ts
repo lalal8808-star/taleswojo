@@ -16,6 +16,21 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
 
+// Helper function to remove Korean characters from the illustration prompt
+// to guarantee Pollinations.ai API compatibility (avoids broken image Xbox error)
+function sanitizeIllustrationPrompt(prompt: string): string {
+  if (!prompt) return 'magical whimsical cozy bedroom with glowing stars';
+  
+  // Remove Korean characters completely to prevent URL/API query breakages
+  const sanitized = prompt.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
+  
+  // If the prompt became empty or too short after removing Korean, fallback to safe dreamy defaults
+  if (sanitized.length < 5) {
+    return 'magical dreamy kid adventure with stars and glowing light';
+  }
+  return sanitized;
+}
+
 export async function POST(req: Request) {
   try {
     const { name, interest, lesson } = await req.json();
@@ -57,7 +72,6 @@ export async function POST(req: Request) {
     console.log('[1/2] Raw story generation complete! Length:', rawStoryText.length);
 
     // Step 2: Page division and Illustration prompt generation using Gemini 3.5 Flash
-    // We will check if GEMINI_API_KEY is available. If not, we will fallback to local parsing.
     const hasGeminiKey = !!process.env.GEMINI_API_KEY;
     
     if (hasGeminiKey) {
@@ -69,28 +83,35 @@ export async function POST(req: Request) {
             title: z.string().describe('아름답고 시적인 동화의 한글 제목'),
             pages: z.array(z.object({
               pageNumber: z.number().describe('1부터 시작하는 페이지 번호'),
-              text: z.string().describe('해당 페이지에 배치될 한국어 동화 본문 텍스트 (자연스럽게 이어지도록 페이지당 2~4개 문장 정도)'),
-              illustrationPrompt: z.string().describe('이 페이지의 묘사에 어울리는 극상의 영어 이미지 생성 프롬프트. 주인공 비주얼(아이)과 배경이 묘사되어야 함. 단, 그림체 지침은 제외하고 장면 위주로만 영문 묘사할 것.')
+              text: z.string().describe('해당 페이지에 배치될 한국어 동화 본문 텍스트'),
+              illustrationPrompt: z.string().describe('이 페이지의 묘사에 어울리는 극상의 영어 이미지 생성 프롬프트. 한글 단어 절대 금지, 오직 영어로만 작성.')
             })).describe('기승전결에 맞추어 분할된 3~5개의 동화 페이지들')
           }),
           prompt: `당신은 세계 최고의 아동 그림 동화책 기획자입니다.
 아래 제공된 [한국어 동화 원본]을 분석하여, 기승전결 흐름에 맞추어 3~5개의 가독성 좋은 '페이지'로 본문을 자연스럽게 쪼개어 배분해 주세요.
 그리고 각 페이지의 장면 묘사에 어울리는 극상의 고품질 영문 이미지 생성 프롬프트(illustrationPrompt)를 지어주세요.
 
-주인공 이름: ${name}
-아이의 관심사: ${interest}
-
 [한국어 동화 원본]
 ${rawStoryText}
 
 [삽화 프롬프트 작성 지침]
-1. 영문 프롬프트에는 장면의 인물(예: A little kid named ${name} with happy eyes), 배경(예: sailing in a sparkling galaxy ship made of glowing starlight), 행동 위주로 구체적으로 묘사하세요.
-2. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 함을 강조하세요.
-3. 그림체나 예술 화풍 스타일(예: children's watercolor style 등)은 나중에 일관되게 덧붙일 것이므로, 프롬프트 내부에는 "장면의 구체적인 비주얼 묘사"에만 집중해 영문으로 작성해 주세요.`,
+1. 영문 프롬프트에는 장면의 인물, 배경, 행동 위주로 구체적으로 묘사하세요.
+2. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 프롬프트를 작성해 주세요.
+3. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 함을 강조하세요.
+4. 그림체나 예술 화풍 스타일은 나중에 일관되게 덧붙일 것이므로, 프롬프트 내부에는 "장면의 구체적인 비주얼 묘사"에만 집중해 영문으로 작성해 주세요.`,
         });
 
+        // Robust sanitize: sanitize all prompts just in case Gemini accidentally sneaks Korean in
+        const sanitizedPages = result.object.pages.map(page => ({
+          ...page,
+          illustrationPrompt: sanitizeIllustrationPrompt(page.illustrationPrompt)
+        }));
+
         console.log('[2/2] Hybrid generation with Gemini complete! Sending structured JSON.');
-        return new Response(JSON.stringify(result.object), {
+        return new Response(JSON.stringify({
+          title: result.object.title,
+          pages: sanitizedPages
+        }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
@@ -103,12 +124,8 @@ ${rawStoryText}
     // FALLBACK: If Gemini API key is missing or failed, use local parser & generation
     console.log('[2/2] [FALLBACK] Segmenting story locally using rule-based paragraph divider...');
     
-    // Attempt basic parsing of the raw story
     const lines = rawStoryText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     let title = `${name}의 꿈나라 여행`;
-    let bodyParagraphs: string[] = [];
-
-    // Parse title if it looks like [제목] or first line
     let startIndex = 0;
     if (lines.length > 0) {
       const firstLine = lines[0];
@@ -125,19 +142,20 @@ ${rawStoryText}
       }
     }
 
-    // Join remaining text and split by double line breaks or chunk paragraphs
     const remainingText = lines.slice(startIndex).join('\n\n');
     const paragraphs = remainingText.split('\n\n').filter(p => p.trim().length > 10);
     
-    // Group paragraphs into 3-5 pages
     const pagesCount = Math.min(5, Math.max(3, paragraphs.length));
     const pages = [];
 
+    // Formulate a beautiful, 100% pure English prompt matching the topic to avoid any broken images
+    const englishInterestKey = interest.toLowerCase().includes('space') || interest.toLowerCase().includes('우주') ? 'space adventure rocket' : 'dreamy magical landscape';
+    
     for (let i = 0; i < pagesCount; i++) {
       const pageText = paragraphs[i] || '오늘 밤도 깊은 행복 속에서 별빛 이불을 덮고 예쁜 꿈을 꿉니다.';
       
-      // Build a simple heuristic translation prompt for the illustration
-      const promptDescription = `A lovely child named ${name} experiencing a dreamy scene related to ${interest} with beautiful stars and moon.`;
+      // Strict pure English prompts for fallback mode to guarantee image rendering
+      const promptDescription = `A lovely adorable child experiencing a dreamy fantasy bedroom adventure of ${englishInterestKey} surrounded by sparkling stars, warm moonlight, clouds, beautiful magic light`;
       
       pages.push({
         pageNumber: i + 1,
