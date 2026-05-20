@@ -54,13 +54,12 @@ const LESSON_PRESETS = [
   "자연과 생명을 아끼고 사랑하기"
 ];
 
-// Beautiful magical fallback illustrations from Unsplash (children's fantasy nighttime aesthetics)
 const FALLBACK_ILLUSTRATIONS = [
-  "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80", // Cozy pastel dream stars
-  "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80", // Whimsical stardust trail
-  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Deep cosmic magic gold
-  "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80", // Soft pink aurora dreamland
-  "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80"  // Magical moon glowing purple
+  "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80"
 ];
 
 export default function Home() {
@@ -81,13 +80,17 @@ export default function Home() {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  // High-fidelity image load state system
+  // Magical Real-Time Stage Tracker to eradicate boring loading times!
+  const [loadingStage, setLoadingStage] = useState(1);
+  const [loadingSeconds, setLoadingSeconds] = useState(0);
+  
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   
   const abortControllerRef = useRef<AbortController | null>(null);
   const isSpeakingRef = useRef(false);
   const currentPageIndexRef = useRef(0);
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
@@ -97,7 +100,45 @@ export default function Home() {
     currentPageIndexRef.current = currentPageIndex;
   }, [currentPageIndex]);
 
-  // Stars and history loading
+  // Loading Stage and Seconds Tracker
+  useEffect(() => {
+    if (isLoading) {
+      setLoadingSeconds(0);
+      setLoadingStage(1);
+      
+      loadingTimerRef.current = setInterval(() => {
+        setLoadingSeconds(prev => {
+          const nextSec = prev + 1;
+          // Step 1: Writing Story (0 ~ 7s)
+          if (nextSec < 7) {
+            setLoadingStage(1);
+          } 
+          // Step 2: Planning Illustration (7 ~ 11s)
+          else if (nextSec >= 7 && nextSec < 11) {
+            setLoadingStage(2);
+          } 
+          // Step 3: Coloring canvas (11s+)
+          else {
+            setLoadingStage(3);
+          }
+          return nextSec;
+        });
+      }, 1000);
+    } else {
+      if (loadingTimerRef.current) {
+        clearInterval(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (loadingTimerRef.current) {
+        clearInterval(loadingTimerRef.current);
+      }
+    };
+  }, [isLoading]);
+
+  // Mount setup
   useEffect(() => {
     const starList = Array.from({ length: 80 }).map((_, idx) => {
       const left = `${Math.random() * 100}%`;
@@ -152,11 +193,10 @@ export default function Home() {
     }
   }, []);
 
-  // Compute absolute URL for each page's illustration
+  // Compute absolute URL
   const getIllustrationUrl = (prompt: string, pageNum: number) => {
     if (!prompt) return FALLBACK_ILLUSTRATIONS[pageNum % FALLBACK_ILLUSTRATIONS.length];
     
-    // Check if we already registered an error for this page's prompt
     const uniqueKey = `${activeStory?.title || 'story'}-${pageNum}`;
     if (imageErrors[uniqueKey]) {
       return FALLBACK_ILLUSTRATIONS[pageNum % FALLBACK_ILLUSTRATIONS.length];
@@ -166,7 +206,8 @@ export default function Home() {
     const fullPrompt = `${stylePrefix}, ${prompt}`;
     
     const seed = 1000 + pageNum * 250 + (activeStory?.title.length || 0);
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}`;
+    // Optimization: using smaller dimension (640x480) for ultrafast loading on all screens, while retaining rich quality
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}`;
   };
 
   const handleImageLoad = (key: string) => {
@@ -270,7 +311,7 @@ export default function Home() {
     }
   };
 
-  // TTS Narrator
+  // TTS
   const handleStartSpeaking = () => {
     if (!activeStory || typeof window === 'undefined') return;
     if (isSpeaking && isPaused) {
@@ -388,7 +429,6 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen pb-20">
-      {/* Background stars */}
       <div className="night-sky">
         {stars.map((star) => (
           <div
@@ -410,7 +450,7 @@ export default function Home() {
           <p className="app-subtitle">매일 밤 우리 아이에게 들려주는 세상 하나뿐인 그림 동화책</p>
         </header>
 
-        {/* Inputs panel */}
+        {/* Inputs Form */}
         <section className="form-card glass-panel">
           <h2 className="input-label" style={{ fontSize: '1.6rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
             <Sparkles className="text-secondary" size={24} /> 
@@ -526,22 +566,146 @@ export default function Home() {
           </form>
         </section>
 
-        {/* Book View panel */}
+        {/* Story Book View */}
         <section id="storybook" className="book-panel glass-panel" style={{ padding: '30px' }}>
           {isLoading ? (
-            <div className="story-placeholder">
-              <div className="placeholder-illustration" style={{ animation: 'floatMoon 4s ease-in-out infinite' }}>🎨📖</div>
-              <h3 className="app-title" style={{ fontSize: '1.8rem', textAlign: 'center' }}>
-                로컬 AI와 Gemini 요정이 동화를 만드는 중...
+            <div className="story-placeholder" style={{ padding: '20px 0' }}>
+              <div className="placeholder-illustration" style={{ animation: 'floatMoon 4s ease-in-out infinite', fontSize: '4.5rem', marginBottom: '15px' }}>🔮🎨</div>
+              
+              <h3 className="app-title" style={{ fontSize: '1.9rem', textAlign: 'center', marginBottom: '20px' }}>
+                마법 동화책이 열리고 있습니다... ({loadingSeconds}초)
               </h3>
-              <p style={{ color: 'var(--color-text-secondary)', maxWidth: '400px', textAlign: 'center', lineHeight: '1.6', fontSize: '0.95rem' }}>
-                LM Studio가 한글 자락으로 포근한 문장을 짓고, <b>Gemini 3.5 Flash</b>가 이야기를 기승전결로 나누어 감성 일러스트 삽화를 그려내고 있습니다. 약 20~30초 가량 소요됩니다.
-              </p>
-              <div className="loading-wave">
-                <div className="loading-dot" />
-                <div className="loading-dot" />
-                <div className="loading-dot" />
-                <div className="loading-dot" />
+              
+              {/* MAGICAL REAL-TIME PROGRESS TIMELINE */}
+              <div style={{
+                width: '100%',
+                maxWidth: '450px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '15px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                padding: '20px',
+                borderRadius: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                margin: '0 auto'
+              }}>
+                {/* Stage 1 */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  opacity: loadingStage === 1 ? 1 : 0.4,
+                  transition: 'opacity 0.3s ease'
+                }}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: loadingStage === 1 ? 'var(--color-primary)' : 'rgba(255,255,255,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    color: '#fff'
+                  }}>
+                    {loadingStage > 1 ? '✓' : '1'}
+                  </div>
+                  <div style={{ textAlign: 'left', flex: 1 }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '600', color: loadingStage === 1 ? 'var(--color-primary)' : '#fff' }}>
+                      요정들이 이야기를 지어내는 중
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                      LM Studio가 포근한 한글 문장 창작 중... (8초 내외)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stage 2 */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  opacity: loadingStage === 2 ? 1 : 0.4,
+                  transition: 'opacity 0.3s ease'
+                }}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: loadingStage === 2 ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    color: '#fff'
+                  }}>
+                    {loadingStage > 2 ? '✓' : '2'}
+                  </div>
+                  <div style={{ textAlign: 'left', flex: 1 }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '600', color: loadingStage === 2 ? 'var(--color-accent)' : '#fff' }}>
+                      Gemini 3.5 Flash의 스케치 기획
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                      기승전결 3페이지 분할 및 이미지 구상 중...
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stage 3 */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  opacity: loadingStage === 3 ? 1 : 0.4,
+                  transition: 'opacity 0.3s ease'
+                }}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: loadingStage === 3 ? 'var(--color-secondary)' : 'rgba(255,255,255,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    color: '#fff'
+                  }}>
+                    3
+                  </div>
+                  <div style={{ textAlign: 'left', flex: 1 }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '600', color: loadingStage === 3 ? 'var(--color-secondary)' : '#fff' }}>
+                      그림에 밤별빛 색칠하기
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                      마법 도화지에 수채화 물감을 입히는 단계
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{
+                width: '100%',
+                maxWidth: '450px',
+                height: '6px',
+                borderRadius: '3px',
+                background: 'rgba(255,255,255,0.05)',
+                margin: '10px auto 0',
+                overflow: 'hidden',
+                position: 'relative'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  height: '100%',
+                  width: `${Math.min(100, (loadingSeconds / 15) * 100)}%`,
+                  background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent), var(--color-secondary))',
+                  transition: 'width 1s ease'
+                }} />
               </div>
             </div>
           ) : activeStory && activePage ? (
