@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Sparkles, 
   Moon, 
@@ -112,6 +112,47 @@ export default function Home() {
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const imageTimeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Theme Fallback selection based on interests keywords (uses index to select)
+  const getThemeFallbackUrl = useCallback((index: number) => {
+    const curInterest = interest.toLowerCase();
+    let themeKey: 'space' | 'forest' | 'toy' | 'sea' | 'default' = 'default';
+
+    if (curInterest.includes('우주') || curInterest.includes('space') || curInterest.includes('별') || curInterest.includes('은하수')) {
+      themeKey = 'space';
+    } else if (curInterest.includes('숲') || curInterest.includes('동물') || curInterest.includes('공룡') || curInterest.includes('forest') || curInterest.includes('animal')) {
+      themeKey = 'forest';
+    } else if (curInterest.includes('방') || curInterest.includes('장난감') || curInterest.includes('toy') || curInterest.includes('집')) {
+      themeKey = 'toy';
+    } else if (curInterest.includes('바다') || curInterest.includes('섬') || curInterest.includes('물') || curInterest.includes('sea') || curInterest.includes('beach')) {
+      themeKey = 'sea';
+    }
+
+    const fallbacks = THEME_FALLBACKS[themeKey];
+    return fallbacks[index % fallbacks.length];
+  }, [interest]);
+
+  // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
+  const getIllustrationUrl = useCallback((prompt: string, index: number) => {
+    const key = `${activeStory?.title || 'story'}-${index}`;
+    
+    // If watchdog marked an error or timeout, load themed high-speed Unsplash fallback instantly
+    if (imageErrors[key]) {
+      return getThemeFallbackUrl(index);
+    }
+    
+    if (!prompt) return getThemeFallbackUrl(index);
+    
+    // CRITICAL: Keep style prefix SHORT (~10 words) but highly descriptive of kids watercolor style.
+    // model=turbo ensures instantaneous loading (1-3 seconds) with premium custom-tailored watercolor.
+    const stylePrefix = "beautiful dreamy soft watercolor illustration for children's bedtime storybook, whimsical and warm, pastel colors, highly detailed, cozy lighting, no text, no letters, no words";
+    // Trim the scene prompt to max 12 words to keep total URL manageable
+    const sceneWords = prompt.split(' ').slice(0, 12).join(' ');
+    const fullPrompt = `${stylePrefix}, ${sceneWords}`;
+    
+    const seed = 1000 + index * 250 + (activeStory?.title.length || 0);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=turbo`;
+  }, [activeStory, imageErrors, getThemeFallbackUrl]);
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
@@ -234,46 +275,31 @@ export default function Home() {
     };
   }, []);
 
-  // Theme Fallback selection based on interests keywords (uses index to select)
-  const getThemeFallbackUrl = (index: number) => {
-    const curInterest = interest.toLowerCase();
-    let themeKey: 'space' | 'forest' | 'toy' | 'sea' | 'default' = 'default';
+  // Background Image Prefetch to render illustrations instantly
+  useEffect(() => {
+    if (activeStory) {
+      console.log(`[Prefetch] Pre-loading illustrations for pages...`);
+      activeStory.pages.forEach((page, idx) => {
+        const url = getIllustrationUrl(page.illustrationPrompt, idx);
+        const pageKey = `${activeStory.title}-${idx}`;
 
-    if (curInterest.includes('우주') || curInterest.includes('space') || curInterest.includes('별') || curInterest.includes('은하수')) {
-      themeKey = 'space';
-    } else if (curInterest.includes('숲') || curInterest.includes('동물') || curInterest.includes('공룡') || curInterest.includes('forest') || curInterest.includes('animal')) {
-      themeKey = 'forest';
-    } else if (curInterest.includes('방') || curInterest.includes('장난감') || curInterest.includes('toy') || curInterest.includes('집')) {
-      themeKey = 'toy';
-    } else if (curInterest.includes('바다') || curInterest.includes('섬') || curInterest.includes('물') || curInterest.includes('sea') || curInterest.includes('beach')) {
-      themeKey = 'sea';
+        // Create new image object in background to trigger dynamic generation and browser caching
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+          console.log(`[Prefetch] Successfully pre-loaded illustration for page ${idx + 1}`);
+          setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
+        };
+        img.onerror = () => {
+          console.warn(`[Prefetch] Failed to pre-load page ${idx + 1}. Swapping to fallback.`);
+          setImageErrors(prev => ({ ...prev, [pageKey]: true }));
+          setLoadedImages(prev => ({ ...prev, [pageKey]: true })); // Resolve loading spinner instantly!
+        };
+      });
     }
+  }, [activeStory, getIllustrationUrl]);
 
-    const fallbacks = THEME_FALLBACKS[themeKey];
-    return fallbacks[index % fallbacks.length];
-  };
 
-  // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
-  const getIllustrationUrl = (prompt: string, index: number) => {
-    const key = `${activeStory?.title || 'story'}-${index}`;
-    
-    // If watchdog marked an error or timeout, load themed high-speed Unsplash fallback instantly
-    if (imageErrors[key]) {
-      return getThemeFallbackUrl(index);
-    }
-    
-    if (!prompt) return getThemeFallbackUrl(index);
-    
-    // CRITICAL: Keep style prefix SHORT (~10 words) but highly descriptive of kids watercolor style.
-    // model=turbo ensures instantaneous loading (1-3 seconds) with premium custom-tailored watercolor.
-    const stylePrefix = "beautiful dreamy soft watercolor illustration for children's bedtime storybook, whimsical and warm, pastel colors, highly detailed, cozy lighting, no text, no letters, no words";
-    // Trim the scene prompt to max 12 words to keep total URL manageable
-    const sceneWords = prompt.split(' ').slice(0, 12).join(' ');
-    const fullPrompt = `${stylePrefix}, ${sceneWords}`;
-    
-    const seed = 1000 + index * 250 + (activeStory?.title.length || 0);
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=turbo`;
-  };
 
   const handleImageLoad = (key: string) => {
     setLoadedImages(prev => ({ ...prev, [key]: true }));
@@ -417,6 +443,19 @@ export default function Home() {
     audio.onplay = () => {
       setIsSpeaking(true);
       setIsPaused(false);
+
+      // Prefetch the NEXT page's TTS audio in the background for zero-latency transition
+      const nextIndex = currentPageIndexRef.current + 1;
+      if (nextIndex < activeStory.pages.length) {
+        const nextPage = activeStory.pages[nextIndex];
+        const nextText = nextPage.text.replace(/[#*\[\]]/g, '').trim();
+        const nextAudioUrl = `/api/tts?text=${encodeURIComponent(nextText)}&voice=${ttsVoice}`;
+        
+        console.log(`[Prefetch] Pre-loading TTS audio for page ${nextIndex + 1}...`);
+        const prefetchAudio = new Audio();
+        prefetchAudio.src = nextAudioUrl;
+        prefetchAudio.preload = 'auto';
+      }
     };
 
     audio.onended = () => {
