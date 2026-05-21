@@ -57,29 +57,29 @@ const LESSON_PRESETS = [
 // Curated high-fidelity illustration URLs to instantly render beautiful artwork
 const THEME_FALLBACKS = {
   space: [
-    "https://images.unsplash.com/photo-1518818419601-72c8673f5852?w=800&auto=format&fit=crop&q=80", // Cosmic crescent
-    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=800&auto=format&fit=crop&q=80", // Dreamy stars
-    "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&auto=format&fit=crop&q=80"  // Whimsical galaxy ship
+    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80", // Yellow crescent moon & starry sky illustration
+    "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Magical pink/purple dreamy glitter
+    "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80"  // Dreamy aurora night sky child aesthetic
   ],
   forest: [
-    "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&auto=format&fit=crop&q=80", // Deep magic wood
-    "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&auto=format&fit=crop&q=80", // Cozy giant trees
-    "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80"  // Magical meadow
+    "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=80", // Magical pastel bedtime forest illustration
+    "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800&auto=format&fit=crop&q=80", // Super cute watercolor flowers
+    "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80"  // Whimsical sunlight trees
   ],
   toy: [
-    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=800&auto=format&fit=crop&q=80", // Block castle
-    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=800&auto=format&fit=crop&q=80", // Cozy teddy bear room
-    "https://images.unsplash.com/photo-1566577134770-3d85bb3a9cc4?w=800&auto=format&fit=crop&q=80"  // Magic playroom
+    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=800&auto=format&fit=crop&q=80", // Cozy warm teddy bear room
+    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=800&auto=format&fit=crop&q=80", // Pastel toy blocks
+    "https://images.unsplash.com/photo-1584824486509-112e4181ff6b?w=800&auto=format&fit=crop&q=80"  // Sweet 3D pastel shapes pattern
   ],
   sea: [
-    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80", // Golden sands
-    "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80", // Dream sunset
-    "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800&auto=format&fit=crop&q=80"  // Secret coral paradise
+    "https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80", // Dreamy pink/violet sunset ocean
+    "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800&auto=format&fit=crop&q=80", // Clear emerald secret underwater fantasy
+    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80"  // Soft 3D pastel bubbles
   ],
   default: [
-    "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=800&auto=format&fit=crop&q=80", // Glowing stardust
-    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80", // Crescent moon
-    "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?w=800&auto=format&fit=crop&q=80"  // Green forest leaf
+    "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80", // Highly adorable watercolor animals and flowers
+    "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=80", // Dreamy pastel child fantasy book cover art
+    "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80"  // Starry golden moon
   ]
 };
 
@@ -269,12 +269,13 @@ export default function Home() {
     
     if (!prompt) return getThemeFallbackUrl(pageNum);
     
-    const stylePrefix = "whimsical children book illustration, beautiful soft watercolor pastel style, bedtime story aesthetic, cozy warm colors, adorable, extremely detailed, no words, no text, no letters";
+    // High-quality illustration styling to enforce beautiful children book art with 3D Disney/Pixar claymation & cute watercolors
+    const stylePrefix = "super cute and warm 3D claymation style, Pixar Disney animation character, whimsical bedtime children's book illustration, beautiful soft watercolor pastel colors, cozy dreamy bedtime story aesthetic, extremely adorable, no words, no text, no letters";
     const fullPrompt = `${stylePrefix}, ${prompt}`;
     
     const seed = 1000 + pageNum * 250 + (activeStory?.title.length || 0);
-    // Optimized smaller width/height + model=turbo parameters for Pollinations AI to maximize creation speed
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}&model=turbo`;
+    // Removed model=turbo to let Pollinations AI use its standard premium model for much higher artistic quality and kid appeal
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}`;
   };
 
   const handleImageLoad = (key: string) => {
