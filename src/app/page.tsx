@@ -163,18 +163,19 @@ export default function Home() {
         clearTimeout(imageTimeoutTimerRef.current);
       }
       
-      // If the image hasn't loaded in 2.5 seconds, force switch to premium fallback and disable loader
+      // If the image hasn't loaded in 8 seconds, force switch to premium fallback and disable loader
+      // NOTE: Short prompts take ~1.3s, medium ~3-5s. 8s gives Pollinations.ai fair chance before fallback.
       imageTimeoutTimerRef.current = setTimeout(() => {
         if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
-          console.warn(`[Watchdog Timeout] Image taking too long for ${pageKey}. Swapping to Unsplash.`);
+          console.warn(`[Watchdog Timeout] Image taking too long for ${pageKey}. Swapping to fallback.`);
           
-          // 1. Force the image error state so src points to backup Unsplash immediately
+          // 1. Force the image error state so src points to backup fallback immediately
           setImageErrors(prev => ({ ...prev, [pageKey]: true }));
           
-          // 2. IMMEDIATELY set the image as loaded so the loading spinner vanishes and shows the themed fallback
+          // 2. IMMEDIATELY set the image as loaded so the loading spinner vanishes
           setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         }
-      }, 2500); 
+      }, 8000); 
     }
 
     return () => {
@@ -269,12 +270,14 @@ export default function Home() {
     
     if (!prompt) return getThemeFallbackUrl(pageNum);
     
-    // High-quality illustration styling to enforce beautiful children book art with 3D Disney/Pixar claymation & cute watercolors
-    const stylePrefix = "super cute and warm 3D claymation style, Pixar Disney animation character, whimsical bedtime children's book illustration, beautiful soft watercolor pastel colors, cozy dreamy bedtime story aesthetic, extremely adorable, no words, no text, no letters";
-    const fullPrompt = `${stylePrefix}, ${prompt}`;
+    // CRITICAL: Keep style prefix SHORT (~10 words). Long prompts cause Pollinations.ai to timeout completely!
+    // Tested: 7-word prompts succeed in 1.3s. 40+ word prompts timeout at 15s with 0 bytes.
+    const stylePrefix = "cute children book illustration, pastel watercolor, adorable, no text";
+    // Trim the scene prompt to max 12 words to keep total URL manageable
+    const sceneWords = prompt.split(' ').slice(0, 12).join(' ');
+    const fullPrompt = `${stylePrefix}, ${sceneWords}`;
     
     const seed = 1000 + pageNum * 250 + (activeStory?.title.length || 0);
-    // Removed model=turbo to let Pollinations AI use its standard premium model for much higher artistic quality and kid appeal
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}`;
   };
 
