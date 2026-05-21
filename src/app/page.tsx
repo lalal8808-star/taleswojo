@@ -94,8 +94,7 @@ export default function Home() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [ttsVoice, setTtsVoice] = useState('ko-KR-SunHiNeural'); // ko-KR-SunHiNeural (Mother), ko-KR-InJoonNeural (Father), ko-KR-JiMinNeural (Child)
   
   const [activeStory, setActiveStory] = useState<{ title: string; pages: StoryPage[] } | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -112,6 +111,7 @@ export default function Home() {
   const currentPageIndexRef = useRef(0);
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const imageTimeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
@@ -226,18 +226,12 @@ export default function Home() {
       }
     }
 
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const loadVoices = () => {
-        const voiceList = window.speechSynthesis.getVoices();
-        const koVoices = voiceList.filter(v => v.lang.includes('ko'));
-        setVoices(koVoices);
-        if (koVoices.length > 0 && !selectedVoice) {
-          setSelectedVoice(koVoices[0]);
-        }
-      };
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, []);
 
   // Theme Fallback selection based on interests keywords (uses index to select)
@@ -385,9 +379,9 @@ export default function Home() {
 
   // TTS
   const handleStartSpeaking = () => {
-    if (!activeStory || typeof window === 'undefined') return;
-    if (isSpeaking && isPaused) {
-      window.speechSynthesis.resume();
+    if (!activeStory) return;
+    if (isSpeaking && isPaused && audioRef.current) {
+      audioRef.current.play().catch(console.error);
       setIsPaused(false);
       return;
     }
@@ -395,8 +389,13 @@ export default function Home() {
   };
 
   const speakCurrentPage = () => {
-    if (!activeStory || typeof window === 'undefined') return;
-    window.speechSynthesis.cancel();
+    if (!activeStory) return;
+    
+    // Reset previous audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
 
     const page = activeStory.pages[currentPageIndexRef.current];
     let textToRead = '';
@@ -408,18 +407,19 @@ export default function Home() {
     textToRead += page.text;
     const cleanText = textToRead.replace(/[#*\[\]]/g, '').trim();
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'ko-KR';
-    utterance.rate = speechRate;
+    // Stream from our Edge TTS proxy API
+    const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&voice=${ttsVoice}`;
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+    
+    audio.playbackRate = speechRate;
+    
+    audio.onplay = () => {
+      setIsSpeaking(true);
+      setIsPaused(false);
+    };
 
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    } else {
-      const defaultKo = voices.find(v => v.lang.includes('ko'));
-      if (defaultKo) utterance.voice = defaultKo;
-    }
-
-    utterance.onend = () => {
+    audio.onended = () => {
       const nextIndex = currentPageIndexRef.current + 1;
       if (nextIndex < activeStory.pages.length) {
         setTimeout(() => {
@@ -434,32 +434,37 @@ export default function Home() {
       }
     };
 
-    utterance.onerror = () => {
+    audio.onerror = (e) => {
+      console.error('[Audio Playback Error]:', e);
       setIsSpeaking(false);
       setIsPaused(false);
     };
 
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-    setIsPaused(false);
+    audio.play().catch((err) => {
+      console.warn('Audio play failed (waiting for user interaction):', err);
+      setIsSpeaking(false);
+      setIsPaused(false);
+    });
   };
 
   const handlePauseSpeaking = () => {
-    if (typeof window === 'undefined') return;
-    if (window.speechSynthesis.speaking) {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
+    if (!audioRef.current) return;
+    if (isSpeaking) {
+      if (isPaused) {
+        audioRef.current.play().catch(console.error);
         setIsPaused(false);
       } else {
-        window.speechSynthesis.pause();
+        audioRef.current.pause();
         setIsPaused(true);
       }
     }
   };
 
   const handleStopSpeaking = () => {
-    if (typeof window === 'undefined') return;
-    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
     setIsSpeaking(false);
     setIsPaused(false);
   };
@@ -818,25 +823,46 @@ export default function Home() {
                   <span>{isSpeaking ? (isPaused ? '자장가 일시정지' : '자동 책장 넘기며 낭독 중...') : '오디오 북 켜기'}</span>
                 </div>
 
-                <div className="audio-speed-control">
-                  <span>속도:</span>
-                  <select 
-                    className="audio-speed-select" 
-                    value={speechRate} 
-                    onChange={(e) => {
-                      const newRate = parseFloat(e.target.value);
-                      setSpeechRate(newRate);
-                      if (isSpeaking) {
-                        handleStopSpeaking();
-                        setTimeout(() => speakCurrentPage(), 100);
-                      }
-                    }}
-                  >
-                    <option value="0.7">매우 천천히</option>
-                    <option value="0.8">차분히 (잠자리용)</option>
-                    <option value="0.9">보통 속도</option>
-                    <option value="1.0">조금 빠르게</option>
-                  </select>
+                <div className="audio-speed-control" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>목소리:</span>
+                    <select 
+                      className="audio-speed-select"
+                      value={ttsVoice}
+                      onChange={(e) => {
+                        const newVoice = e.target.value;
+                        setTtsVoice(newVoice);
+                        if (isSpeaking) {
+                          handleStopSpeaking();
+                          setTimeout(() => speakCurrentPage(), 100);
+                        }
+                      }}
+                    >
+                      <option value="ko-KR-SunHiNeural">👩 따뜻한 엄마 (선희)</option>
+                      <option value="ko-KR-InJoonNeural">👨 차분한 아빠 (인준)</option>
+                      <option value="ko-KR-JiMinNeural">👧 귀여운 아이 (지민)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>속도:</span>
+                    <select 
+                      className="audio-speed-select" 
+                      value={speechRate} 
+                      onChange={(e) => {
+                        const newRate = parseFloat(e.target.value);
+                        setSpeechRate(newRate);
+                        if (audioRef.current) {
+                          audioRef.current.playbackRate = newRate;
+                        }
+                      }}
+                    >
+                      <option value="0.7">매우 천천히</option>
+                      <option value="0.8">차분히 (잠자리용)</option>
+                      <option value="0.9">보통 속도</option>
+                      <option value="1.0">조금 빠르게</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
