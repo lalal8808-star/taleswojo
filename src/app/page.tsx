@@ -62,7 +62,7 @@ const THEME_FALLBACKS = {
     "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80"  // Dreamy aurora night sky child aesthetic
   ],
   forest: [
-    "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=80", // Magical pastel bedtime forest illustration
+    "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&auto=format&fit=crop&q=80", // Magical pastel bedtime forest illustration
     "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800&auto=format&fit=crop&q=80", // Super cute watercolor flowers
     "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80"  // Whimsical sunlight trees
   ],
@@ -77,8 +77,8 @@ const THEME_FALLBACKS = {
     "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80"  // Soft 3D pastel bubbles
   ],
   default: [
-    "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80", // Highly adorable watercolor animals and flowers
-    "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=80", // Dreamy pastel child fantasy book cover art
+    "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=800&auto=format&fit=crop&q=80", // Adorable dreamy night star child illustration
+    "https://images.unsplash.com/photo-1559251606-c623743a6d76?w=800&auto=format&fit=crop&q=80", // Cute cozy teddy bear sleeping illustration
     "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800&auto=format&fit=crop&q=80"  // Starry golden moon
   ]
 };
@@ -163,8 +163,8 @@ export default function Home() {
         clearTimeout(imageTimeoutTimerRef.current);
       }
       
-      // If the image hasn't loaded in 8 seconds, force switch to premium fallback and disable loader
-      // NOTE: Short prompts take ~1.3s, medium ~3-5s. 8s gives Pollinations.ai fair chance before fallback.
+      // If the image hasn't loaded in 18 seconds, force switch to premium fallback and disable loader
+      // NOTE: Set to 18 seconds to give Pollinations.ai Flux generation plenty of time to build beautiful drawings.
       imageTimeoutTimerRef.current = setTimeout(() => {
         if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
           console.warn(`[Watchdog Timeout] Image taking too long for ${pageKey}. Swapping to fallback.`);
@@ -175,7 +175,7 @@ export default function Home() {
           // 2. IMMEDIATELY set the image as loaded so the loading spinner vanishes
           setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         }
-      }, 8000); 
+      }, 18000); 
     }
 
     return () => {
@@ -240,8 +240,8 @@ export default function Home() {
     }
   }, []);
 
-  // Theme Fallback selection based on interests keywords
-  const getThemeFallbackUrl = (pageNum: number) => {
+  // Theme Fallback selection based on interests keywords (uses index to select)
+  const getThemeFallbackUrl = (index: number) => {
     const curInterest = interest.toLowerCase();
     let themeKey: 'space' | 'forest' | 'toy' | 'sea' | 'default' = 'default';
 
@@ -256,29 +256,29 @@ export default function Home() {
     }
 
     const fallbacks = THEME_FALLBACKS[themeKey];
-    return fallbacks[pageNum % fallbacks.length];
+    return fallbacks[index % fallbacks.length];
   };
 
-  // Compute absolute URL
-  const getIllustrationUrl = (prompt: string, pageNum: number) => {
-    const uniqueKey = `${activeStory?.title || 'story'}-${pageNum}`;
+  // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
+  const getIllustrationUrl = (prompt: string, index: number) => {
+    const key = `${activeStory?.title || 'story'}-${index}`;
     
     // If watchdog marked an error or timeout, load themed high-speed Unsplash fallback instantly
-    if (imageErrors[uniqueKey]) {
-      return getThemeFallbackUrl(pageNum);
+    if (imageErrors[key]) {
+      return getThemeFallbackUrl(index);
     }
     
-    if (!prompt) return getThemeFallbackUrl(pageNum);
+    if (!prompt) return getThemeFallbackUrl(index);
     
-    // CRITICAL: Keep style prefix SHORT (~10 words). Long prompts cause Pollinations.ai to timeout completely!
-    // Tested: 7-word prompts succeed in 1.3s. 40+ word prompts timeout at 15s with 0 bytes.
-    const stylePrefix = "cute children book illustration, pastel watercolor, adorable, no text";
+    // CRITICAL: Keep style prefix SHORT (~10 words) but highly descriptive of kids watercolor style.
+    // model=turbo ensures instantaneous loading (1-3 seconds) with premium custom-tailored watercolor.
+    const stylePrefix = "beautiful dreamy soft watercolor illustration for children's bedtime storybook, whimsical and warm, pastel colors, highly detailed, cozy lighting, no text, no letters, no words";
     // Trim the scene prompt to max 12 words to keep total URL manageable
     const sceneWords = prompt.split(' ').slice(0, 12).join(' ');
     const fullPrompt = `${stylePrefix}, ${sceneWords}`;
     
-    const seed = 1000 + pageNum * 250 + (activeStory?.title.length || 0);
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=640&height=480&nologo=true&seed=${seed}`;
+    const seed = 1000 + index * 250 + (activeStory?.title.length || 0);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=turbo`;
   };
 
   const handleImageLoad = (key: string) => {
@@ -497,7 +497,7 @@ export default function Home() {
   const totalPages = activeStory?.pages.length || 0;
   const imageKey = activeStory ? `${activeStory.title}-${currentPageIndex}` : '';
   const isImageLoaded = loadedImages[imageKey] || false;
-  const currentImageUrl = activePage ? getIllustrationUrl(activePage.illustrationPrompt, activePage.pageNumber) : '';
+  const currentImageUrl = activePage ? getIllustrationUrl(activePage.illustrationPrompt, currentPageIndex) : '';
 
   return (
     <div className="relative min-h-screen pb-20">
@@ -876,7 +876,7 @@ export default function Home() {
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
-                        key={currentImageUrl}
+                        key={imageKey}
                         src={currentImageUrl} 
                         alt="Bedtime story illustration"
                         style={{
