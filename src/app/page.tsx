@@ -17,7 +17,8 @@ import {
   RefreshCw,
   BookOpen,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Printer
 } from 'lucide-react';
 
 interface StoryPage {
@@ -133,6 +134,7 @@ export default function Home() {
   }, [interest]);
 
   // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
+  // STYLE CONSISTENCY: Locked-down gouache style prefix + title-hash seeding ensures uniform art across all pages.
   const getIllustrationUrl = useCallback((prompt: string, index: number) => {
     const key = `${activeStory?.title || 'story'}-${index}`;
     
@@ -143,14 +145,15 @@ export default function Home() {
     
     if (!prompt) return getThemeFallbackUrl(index);
     
-    // CRITICAL: Keep style prefix SHORT (~10 words) but highly descriptive of kids watercolor style.
-    // model=turbo ensures instantaneous loading (1-3 seconds) with premium custom-tailored watercolor.
-    const stylePrefix = "beautiful dreamy soft watercolor illustration for children's bedtime storybook, whimsical and warm, pastel colors, highly detailed, cozy lighting, no text, no letters, no words";
-    // Trim the scene prompt to max 12 words to keep total URL manageable
-    const sceneWords = prompt.split(' ').slice(0, 12).join(' ');
+    // Locked-down consistent art style — gouache + specific palette + character traits
+    // This ensures every page looks like it was drawn by the same illustrator.
+    const stylePrefix = "soft gouache children's picture book illustration, consistent rounded art style, warm amber golden lighting, muted pastel palette of soft pink lavender mint cream and peach, gentle thick brush textures, cozy dreamy storybook atmosphere, cute simplified character with round eyes and rosy cheeks, same illustrator same artistic style throughout, no text no letters no words no writing";
+    const sceneWords = prompt.split(' ').slice(0, 14).join(' ');
     const fullPrompt = `${stylePrefix}, ${sceneWords}`;
     
-    const seed = 1000 + index * 250 + (activeStory?.title.length || 0);
+    // Derive a stable seed base from the story title hash for style cohesion across pages
+    const titleHash = (activeStory?.title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const seed = (titleHash * 137 + 1000) + index;
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=turbo`;
   }, [activeStory, imageErrors, getThemeFallbackUrl]);
 
@@ -506,6 +509,135 @@ export default function Home() {
     }
     setIsSpeaking(false);
     setIsPaused(false);
+  };
+
+  // Print Booklet: A4 landscape folded in half → saddle-stitched A5 picture book
+  const handlePrintBooklet = () => {
+    if (!activeStory) return;
+
+    // 1. Build logical page contents
+    type BookPage = { type: 'cover' | 'story' | 'back' | 'blank'; title?: string; text?: string; imageUrl?: string; pageLabel?: string };
+    const bookPages: BookPage[] = [];
+
+    // Cover page
+    bookPages.push({
+      type: 'cover',
+      title: activeStory.title,
+      imageUrl: getIllustrationUrl(activeStory.pages[0].illustrationPrompt, 0),
+    });
+
+    // Story pages
+    activeStory.pages.forEach((page, idx) => {
+      bookPages.push({
+        type: 'story',
+        text: page.text,
+        imageUrl: getIllustrationUrl(page.illustrationPrompt, idx),
+        pageLabel: `${idx + 1}`,
+      });
+    });
+
+    // Back cover
+    bookPages.push({ type: 'back', title: '끝' });
+
+    // Pad to multiple of 4 (required for saddle-stitch booklet)
+    while (bookPages.length % 4 !== 0) {
+      bookPages.push({ type: 'blank' });
+    }
+
+    const totalPages = bookPages.length;
+    const totalSheets = totalPages / 4;
+
+    // 2. Booklet imposition ordering
+    // Each A4 landscape sheet has front (left|right) and back (left|right)
+    // When nested and folded, pages read sequentially.
+    const printSides: Array<{ leftIdx: number; rightIdx: number }> = [];
+    for (let s = 0; s < totalSheets; s++) {
+      // Front of sheet
+      printSides.push({ leftIdx: totalPages - 1 - 2 * s, rightIdx: 2 * s });
+      // Back of sheet
+      printSides.push({ leftIdx: 2 * s + 1, rightIdx: totalPages - 2 - 2 * s });
+    }
+
+    // 3. Render half-page content
+    const renderHalf = (pg: BookPage): string => {
+      if (pg.type === 'blank') {
+        return '<div class="half"></div>';
+      }
+      if (pg.type === 'cover') {
+        return `<div class="half cover">
+          ${pg.imageUrl ? `<img src="${pg.imageUrl}" class="cover-img" />` : ''}
+          <h1 class="cover-title">${pg.title || ''}</h1>
+          <p class="cover-author">주인공: ${name || '아이'}</p>
+          <p class="cover-date">${new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>`;
+      }
+      if (pg.type === 'back') {
+        return `<div class="half back">
+          <div class="back-deco">🌙✨</div>
+          <h2 class="back-title">— 끝 —</h2>
+          <p class="back-sub">오늘 밤도 행복한 꿈 꾸세요 💤</p>
+        </div>`;
+      }
+      // Story page
+      return `<div class="half story">
+        ${pg.imageUrl ? `<img src="${pg.imageUrl}" class="story-img" />` : ''}
+        <div class="story-text">${pg.text || ''}</div>
+        <div class="page-num">${pg.pageLabel || ''}</div>
+      </div>`;
+    };
+
+    // 4. Build sheet sides HTML
+    let sheetsHtml = '';
+    printSides.forEach((side) => {
+      sheetsHtml += `<div class="sheet">
+        ${renderHalf(bookPages[side.leftIdx])}
+        <div class="fold"></div>
+        ${renderHalf(bookPages[side.rightIdx])}
+      </div>`;
+    });
+
+    // 5. Full print document
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<title>${activeStory.title} - 그림 동화책 출력</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+@page{size:A4 landscape;margin:0;}
+body{font-family:'Gaegu','Noto Sans KR',sans-serif;background:#f5f0eb;}
+.sheet{width:297mm;height:210mm;display:flex;position:relative;page-break-after:always;background:#fff;}
+.sheet:last-child{page-break-after:auto;}
+.fold{width:0;height:100%;border-left:1.5px dashed #ccc;flex-shrink:0;}
+.half{width:148.5mm;height:210mm;padding:8mm 10mm;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+/* Cover */
+.cover{background:linear-gradient(160deg,#fef9ef,#fce4ec);gap:3mm;}
+.cover-img{width:105mm;height:78mm;object-fit:cover;border-radius:4mm;border:2px solid #f8bbd0;box-shadow:0 2mm 6mm rgba(0,0,0,.08);}
+.cover-title{font-size:20pt;font-weight:700;color:#4a148c;text-align:center;line-height:1.4;margin-top:3mm;}
+.cover-author{font-size:11pt;color:#7b1fa2;}
+.cover-date{font-size:9pt;color:#9e9e9e;}
+/* Story */
+.story{gap:2mm;justify-content:flex-start;padding-top:6mm;}
+.story-img{width:128mm;height:82mm;object-fit:cover;border-radius:3mm;border:1.5px solid #e1bee7;box-shadow:0 1mm 4mm rgba(0,0,0,.06);}
+.story-text{font-size:10.5pt;line-height:1.75;color:#333;text-align:justify;padding:2mm 4mm 0;flex:1;overflow:hidden;word-break:keep-all;}
+.page-num{font-size:9pt;color:#aaa;margin-top:auto;padding-bottom:2mm;}
+/* Back */
+.back{background:linear-gradient(160deg,#e8eaf6,#fce4ec);gap:5mm;}
+.back-deco{font-size:36pt;}
+.back-title{font-size:22pt;font-weight:700;color:#4a148c;}
+.back-sub{font-size:12pt;color:#7b1fa2;}
+/* Loading bar (screen only) */
+.bar{position:fixed;top:0;left:0;right:0;padding:14px;background:#4a148c;color:#fff;text-align:center;font-family:'Noto Sans KR',sans-serif;font-size:14px;z-index:999;}
+@media print{.bar{display:none;}}
+</style></head><body>
+<div class="bar" id="bar">📖 그림을 불러오는 중... 잠시만 기다려 주세요</div>
+${sheetsHtml}
+<script>
+const imgs=document.querySelectorAll('img');let loaded=0;const total=imgs.length;
+function done(){document.getElementById('bar').textContent='✅ 준비 완료! 인쇄 창이 열립니다...';setTimeout(()=>window.print(),800);}
+if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElementById('bar').textContent='📖 그림 불러오는 중... ('+loaded+'/'+total+')';if(loaded>=total)done();};if(i.complete)ck();else{i.onload=ck;i.onerror=ck;}});setTimeout(()=>{if(loaded<total){document.getElementById('bar').textContent='⚠️ 일부 그림을 건너뛰고 인쇄합니다...';setTimeout(()=>window.print(),500);}},30000);}
+</script></body></html>`;
+
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
   };
 
   const selectHistoryItem = (item: StoryHistoryItem) => {
@@ -1021,15 +1153,26 @@ export default function Home() {
                   <b>{currentPageIndex + 1}</b> / {totalPages} 장
                 </span>
 
-                <button 
-                  type="button"
-                  className="audio-btn"
-                  onClick={handleNextPage}
-                  disabled={currentPageIndex === totalPages - 1}
-                  style={{ width: '45px', height: '45px', borderRadius: '12px' }}
-                >
-                  <ChevronRight size={24} />
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button 
+                    type="button"
+                    className="audio-btn"
+                    onClick={handlePrintBooklet}
+                    title="그림 동화책 출력 (A4 접어서 책자)"
+                    style={{ width: '45px', height: '45px', borderRadius: '12px', background: 'rgba(167,139,250,0.15)', color: 'var(--color-primary)' }}
+                  >
+                    <Printer size={20} />
+                  </button>
+                  <button 
+                    type="button"
+                    className="audio-btn"
+                    onClick={handleNextPage}
+                    disabled={currentPageIndex === totalPages - 1}
+                    style={{ width: '45px', height: '45px', borderRadius: '12px' }}
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                </div>
               </div>
 
             </div>
