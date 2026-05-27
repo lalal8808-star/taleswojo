@@ -174,9 +174,9 @@ export default function Home() {
       loadingTimerRef.current = setInterval(() => {
         setLoadingSeconds(prev => {
           const nextSec = prev + 1;
-          if (nextSec < 6) {
+          if (nextSec < 10) {
             setLoadingStage(1);
-          } else if (nextSec >= 6 && nextSec < 9) {
+          } else if (nextSec >= 10 && nextSec < 18) {
             setLoadingStage(2);
           } else {
             setLoadingStage(3);
@@ -863,7 +863,7 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
                       요정들이 이야기를 지어내는 중
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
-                      LM Studio가 포근한 한글 문장 창작 중... (8초 내외)
+                      LM Studio가 포근한 10페이지 동화 창작 중... (15초 내외)
                     </div>
                   </div>
                 </div>
@@ -895,7 +895,7 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
                       Gemini 3.5 Flash의 스케치 기획
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
-                      기승전결 3페이지 분할 및 이미지 구상 중...
+                      10페이지 분할 및 각 페이지별 삽화 구상 중...
                     </div>
                   </div>
                 </div>
@@ -949,7 +949,7 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
                   left: 0,
                   top: 0,
                   height: '100%',
-                  width: `${Math.min(100, (loadingSeconds / 12) * 100)}%`,
+                  width: `${Math.min(100, (loadingSeconds / 25) * 100)}%`,
                   background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent), var(--color-secondary))',
                   transition: 'width 1s ease'
                 }} />
