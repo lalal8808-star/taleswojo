@@ -134,27 +134,27 @@ export default function Home() {
   }, [interest]);
 
   // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
-  // STYLE CONSISTENCY: Locked-down gouache style prefix + title-hash seeding ensures uniform art across all pages.
+  // STYLE CONSISTENCY: Flux Dev model + concise locked style prompt + title-hash seeding.
   const getIllustrationUrl = useCallback((prompt: string, index: number) => {
     const key = `${activeStory?.title || 'story'}-${index}`;
     
-    // If watchdog marked an error or timeout, load themed high-speed Unsplash fallback instantly
     if (imageErrors[key]) {
       return getThemeFallbackUrl(index);
     }
     
     if (!prompt) return getThemeFallbackUrl(index);
     
-    // Locked-down consistent art style — gouache + specific palette + character traits
-    // This ensures every page looks like it was drawn by the same illustrator.
-    const stylePrefix = "soft gouache children's picture book illustration, consistent rounded art style, warm amber golden lighting, muted pastel palette of soft pink lavender mint cream and peach, gentle thick brush textures, cozy dreamy storybook atmosphere, cute simplified character with round eyes and rosy cheeks, same illustrator same artistic style throughout, no text no letters no words no writing";
-    const sceneWords = prompt.split(' ').slice(0, 14).join(' ');
+    // Concise, authoritative style lock — Flux Dev follows short precise prompts best.
+    // "children's book illustration" is the strongest anchor to avoid photo-realism.
+    const stylePrefix = "hand-drawn children's picture book illustration, cute cartoon style, soft watercolor and gouache, warm pastel colors, rounded friendly shapes, cozy storybook art, NOT a photograph";
+    const sceneWords = prompt.split(' ').slice(0, 16).join(' ');
     const fullPrompt = `${stylePrefix}, ${sceneWords}`;
     
-    // Derive a stable seed base from the story title hash for style cohesion across pages
+    // Stable seed from story title hash for visual cohesion across pages
     const titleHash = (activeStory?.title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const seed = (titleHash * 137 + 1000) + index;
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=turbo`;
+    // model=flux (Flux Dev) — slower (~8s) but dramatically better quality, style adherence, and consistency
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=flux`;
   }, [activeStory, imageErrors, getThemeFallbackUrl]);
 
   useEffect(() => {
@@ -207,8 +207,8 @@ export default function Home() {
         clearTimeout(imageTimeoutTimerRef.current);
       }
       
-      // If the image hasn't loaded in 18 seconds, force switch to premium fallback and disable loader
-      // NOTE: Set to 18 seconds to give Pollinations.ai Flux generation plenty of time to build beautiful drawings.
+      // If the image hasn't loaded in 30 seconds, force switch to premium fallback and disable loader
+      // NOTE: Set to 30 seconds because Flux Dev (model=flux) takes ~8-12s to generate high-quality illustrations.
       imageTimeoutTimerRef.current = setTimeout(() => {
         if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
           console.warn(`[Watchdog Timeout] Image taking too long for ${pageKey}. Swapping to fallback.`);
@@ -219,7 +219,7 @@ export default function Home() {
           // 2. IMMEDIATELY set the image as loaded so the loading spinner vanishes
           setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         }
-      }, 18000); 
+      }, 30000); 
     }
 
     return () => {

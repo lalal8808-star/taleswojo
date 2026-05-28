@@ -178,12 +178,13 @@ export async function POST(req: Request) {
 [한국어 동화 원본]
 ${rawStoryText}
 
-[삽화 프롬프트 작성 지침]
-1. 영문 프롬프트에는 장면의 인물, 배경, 행동 위주로 구체적이되 핵심 명사형 위주로 간단하고 콤팩트하게 작성하세요 (14단어 내외 권장).
-2. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 프롬프트를 작성해 주세요.
-3. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 함을 강조하세요.
-4. [캐릭터 일관성 필수] 주인공 아이(${name})는 모든 10개 페이지에서 반드시 "a small cute child with short black hair, round eyes, and rosy cheeks wearing cozy pajamas"로 동일하게 묘사해 주세요. 캐릭터의 외모 묘사가 페이지마다 절대 달라지면 안 됩니다.
-5. 그림체나 예술 화풍 스타일은 나중에 일관되게 덧붙일 것이므로, 프롬프트 내부에는 "장면의 구체적인 비주얼 묘사"에만 집중해 영문으로 작성해 주세요.`;
+[삽화 프롬프트 작성 지침 — 동화책 그림체 필수]
+1. 각 프롬프트는 해당 페이지의 이야기 내용과 정확히 일치하는 장면을 구체적으로 묘사하세요. 인물의 행동, 표정, 배경 환경을 명확하게 포함하세요 (16단어 내외 권장).
+2. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 작성해 주세요.
+3. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 합니다.
+4. [캐릭터 일관성 필수] 주인공은 모든 10개 페이지에서 반드시 "a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas"로 동일하게 묘사해 주세요.
+5. [장면 구체성 필수] 추상적이거나 모호한 묘사(예: "magical atmosphere")는 금지합니다. 반드시 구체적인 행동과 장소를 포함하세요 (예: "child riding a baby dinosaur through a glowing mushroom forest").
+6. 사진이나 실사 느낌이 아닌 동화책 그림체를 위해, 각 프롬프트 끝에 "cartoon illustration style"을 반드시 넣어 주세요.`;
 
         try {
           result = await generateObject({
