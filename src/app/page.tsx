@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Sparkles, 
   Moon, 
@@ -35,6 +35,7 @@ interface StoryHistoryItem {
   title: string;
   pages: StoryPage[];
   date: string;
+  storySeed?: number;
 }
 
 const INTEREST_PRESETS = [
@@ -97,7 +98,7 @@ export default function Home() {
   const [speechRate, setSpeechRate] = useState(0.85);
   const [ttsVoice, setTtsVoice] = useState('ko-KR-SunHiNeural'); // ko-KR-SunHiNeural (Mother), ko-KR-InJoonNeural (Father), ko-KR-JiMinNeural (Child)
   
-  const [activeStory, setActiveStory] = useState<{ title: string; pages: StoryPage[] } | null>(null);
+  const [activeStory, setActiveStory] = useState<{ title: string; pages: StoryPage[]; storySeed?: number } | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -106,6 +107,7 @@ export default function Home() {
   
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [imageAttempts, setImageAttempts] = useState<Record<string, number>>({});
   
   const abortControllerRef = useRef<AbortController | null>(null);
   const isSpeakingRef = useRef(false);
@@ -134,8 +136,8 @@ export default function Home() {
   }, [interest]);
 
   // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
-  // STYLE CONSISTENCY: Flux Dev model + concise locked style prompt + title-hash seeding.
-  const getIllustrationUrl = useCallback((prompt: string, index: number) => {
+  // STYLE CONSISTENCY: Flux Dev/Schnell model + concise locked style prompt + random/stable base seed.
+  const getIllustrationUrl = useCallback((prompt: string, index: number, attempt = 0) => {
     const key = `${activeStory?.title || 'story'}-${index}`;
     
     if (imageErrors[key]) {
@@ -144,17 +146,21 @@ export default function Home() {
     
     if (!prompt) return getThemeFallbackUrl(index);
     
-    // Concise, authoritative style lock — Flux Dev follows short precise prompts best.
-    // "children's book illustration" is the strongest anchor to avoid photo-realism.
+    // 1. COMBINE STYLE AND SCENE PRECISELY (No truncation to preserve full details!)
     const stylePrefix = "hand-drawn children's picture book illustration, cute cartoon style, soft watercolor and gouache, warm pastel colors, rounded friendly shapes, cozy storybook art, NOT a photograph";
-    const sceneWords = prompt.split(' ').slice(0, 16).join(' ');
-    const fullPrompt = `${stylePrefix}, ${sceneWords}`;
+    const fullPrompt = `${stylePrefix}, ${prompt}`;
     
-    // Stable seed from story title hash for visual cohesion across pages
-    const titleHash = (activeStory?.title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const seed = (titleHash * 137 + 1000) + index;
-    // model=flux (Flux Dev) — slower (~8s) but dramatically better quality, style adherence, and consistency
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=flux`;
+    // 2. VASTLY DIFFERENT SEED SPREAD
+    // Use dynamic storySeed if available, else stable title hash. Multiply index to guarantee variance!
+    const baseSeed = activeStory?.storySeed || (activeStory?.title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) * 137 + 1000;
+    const seed = baseSeed + index * 9973;
+    
+    // 3. TIERED MODEL RESOLUTION
+    // Attempt 0: flux (Flux Dev) - high quality, detailed
+    // Attempt 1: turbo (Flux Schnell) - fast, resilient fallback
+    const model = attempt === 0 ? 'flux' : 'turbo';
+    
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=${model}`;
   }, [activeStory, imageErrors, getThemeFallbackUrl]);
 
   useEffect(() => {
@@ -198,28 +204,35 @@ export default function Home() {
     };
   }, [isLoading]);
 
-  // BUG FIX: Watchdog timer correctly triggers failover AND clears the pending loader state immediately!
+  // Watchdog timer triggers fallback attempt OR forces Unsplash fallback on persistent load failures
   useEffect(() => {
     if (activeStory && activeStory.pages[currentPageIndex]) {
       const pageKey = `${activeStory.title}-${currentPageIndex}`;
+      const isLoaded = loadedImages[pageKey] || false;
+      const hasError = imageErrors[pageKey] || false;
       
       if (imageTimeoutTimerRef.current) {
         clearTimeout(imageTimeoutTimerRef.current);
       }
       
-      // If the image hasn't loaded in 30 seconds, force switch to premium fallback and disable loader
-      // NOTE: Set to 30 seconds because Flux Dev (model=flux) takes ~8-12s to generate high-quality illustrations.
-      imageTimeoutTimerRef.current = setTimeout(() => {
-        if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
-          console.warn(`[Watchdog Timeout] Image taking too long for ${pageKey}. Swapping to fallback.`);
-          
-          // 1. Force the image error state so src points to backup fallback immediately
-          setImageErrors(prev => ({ ...prev, [pageKey]: true }));
-          
-          // 2. IMMEDIATELY set the image as loaded so the loading spinner vanishes
-          setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
-        }
-      }, 30000); 
+      if (!isLoaded && !hasError) {
+        const attempt = imageAttempts[pageKey] || 0;
+        // Wait 25 seconds for attempt 0 (Flux Dev), and 10 seconds for attempt 1 (Flux Schnell/turbo)
+        const timeoutDuration = attempt === 0 ? 25000 : 10000;
+        
+        imageTimeoutTimerRef.current = setTimeout(() => {
+          if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
+            if (attempt < 1) {
+              console.warn(`[Watchdog Timeout] Page ${currentPageIndex + 1} took too long on attempt 0. Retrying with turbo...`);
+              setImageAttempts(prev => ({ ...prev, [pageKey]: 1 }));
+            } else {
+              console.warn(`[Watchdog Timeout] Page ${currentPageIndex + 1} failed on all attempts. Swapping to fallback.`);
+              setImageErrors(prev => ({ ...prev, [pageKey]: true }));
+              setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
+            }
+          }
+        }, timeoutDuration);
+      }
     }
 
     return () => {
@@ -227,7 +240,7 @@ export default function Home() {
         clearTimeout(imageTimeoutTimerRef.current);
       }
     };
-  }, [currentPageIndex, activeStory, loadedImages, imageErrors]);
+  }, [currentPageIndex, activeStory, loadedImages, imageErrors, imageAttempts]);
 
   // Mount setup
   useEffect(() => {
@@ -283,7 +296,7 @@ export default function Home() {
     if (activeStory) {
       console.log(`[Prefetch] Pre-loading illustrations for pages...`);
       activeStory.pages.forEach((page, idx) => {
-        const url = getIllustrationUrl(page.illustrationPrompt, idx);
+        const url = getIllustrationUrl(page.illustrationPrompt, idx, 0); // Preload attempt 0 (Flux Dev)
         const pageKey = `${activeStory.title}-${idx}`;
 
         // Create new image object in background to trigger dynamic generation and browser caching
@@ -294,9 +307,7 @@ export default function Home() {
           setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         };
         img.onerror = () => {
-          console.warn(`[Prefetch] Failed to pre-load page ${idx + 1}. Swapping to fallback.`);
-          setImageErrors(prev => ({ ...prev, [pageKey]: true }));
-          setLoadedImages(prev => ({ ...prev, [pageKey]: true })); // Resolve loading spinner instantly!
+          console.warn(`[Prefetch] Failed to pre-load page ${idx + 1}. Browser will attempt to load it when active.`);
         };
       });
     }
@@ -309,9 +320,15 @@ export default function Home() {
   };
 
   const handleImageError = (key: string) => {
-    console.warn(`[Image Failover] Illustration loading failed for key ${key}. Swapping to themed Unsplash URL.`);
-    setImageErrors(prev => ({ ...prev, [key]: true }));
-    setLoadedImages(prev => ({ ...prev, [key]: true })); // Resolve loading spinner instantly!
+    const currentAttempt = imageAttempts[key] || 0;
+    if (currentAttempt < 1) {
+      console.warn(`[Image Failover] Illustration load failed on attempt 0 for key ${key}. Retrying with Flux Schnell (turbo)...`);
+      setImageAttempts(prev => ({ ...prev, [key]: 1 }));
+    } else {
+      console.error(`[Image Failover] Illustration load failed on all attempts for key ${key}. Swapping to themed Unsplash URL.`);
+      setImageErrors(prev => ({ ...prev, [key]: true }));
+      setLoadedImages(prev => ({ ...prev, [key]: true })); // Resolve loading spinner instantly!
+    }
   };
 
   // Generate fairy tale
@@ -327,6 +344,7 @@ export default function Home() {
     setCurrentPageIndex(0);
     setLoadedImages({});
     setImageErrors({});
+    setImageAttempts({});
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -355,7 +373,10 @@ export default function Home() {
         throw new Error('올바른 동화 데이터 규격을 수신하지 못했습니다.');
       }
 
-      setActiveStory(data);
+      // Generate a unique storySeed
+      const storySeed = Math.floor(Math.random() * 1000000);
+      const storyWithSeed = { ...data, storySeed };
+      setActiveStory(storyWithSeed);
 
       const newStory: StoryHistoryItem = {
         id: Date.now().toString(),
@@ -365,6 +386,7 @@ export default function Home() {
         title: data.title,
         pages: data.pages,
         date: new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }),
+        storySeed,
       };
 
       const updatedHistory = [newStory, ...history];
@@ -520,18 +542,20 @@ export default function Home() {
     const bookPages: BookPage[] = [];
 
     // Cover page
+    const coverKey = `${activeStory.title}-0`;
     bookPages.push({
       type: 'cover',
       title: activeStory.title,
-      imageUrl: getIllustrationUrl(activeStory.pages[0].illustrationPrompt, 0),
+      imageUrl: getIllustrationUrl(activeStory.pages[0].illustrationPrompt, 0, imageAttempts[coverKey] || 0),
     });
 
     // Story pages
     activeStory.pages.forEach((page, idx) => {
+      const pageKey = `${activeStory.title}-${idx}`;
       bookPages.push({
         type: 'story',
         text: page.text,
-        imageUrl: getIllustrationUrl(page.illustrationPrompt, idx),
+        imageUrl: getIllustrationUrl(page.illustrationPrompt, idx, imageAttempts[pageKey] || 0),
         pageLabel: `${idx + 1}`,
       });
     });
@@ -645,13 +669,18 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
     setName(item.name);
     setInterest(item.interest);
     setLesson(item.lesson);
+    
+    // Fallback seed from title hash if historical item does not have a storySeed
+    const storySeed = item.storySeed || (item.title.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) * 137 + 1000);
     setActiveStory({
       title: item.title,
-      pages: item.pages
+      pages: item.pages,
+      storySeed
     });
     setCurrentPageIndex(0);
     setLoadedImages({});
     setImageErrors({});
+    setImageAttempts({});
     
     const bookEl = document.getElementById('storybook');
     if (bookEl) {
@@ -673,7 +702,12 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
   const totalPages = activeStory?.pages.length || 0;
   const imageKey = activeStory ? `${activeStory.title}-${currentPageIndex}` : '';
   const isImageLoaded = loadedImages[imageKey] || false;
-  const currentImageUrl = activePage ? getIllustrationUrl(activePage.illustrationPrompt, currentPageIndex) : '';
+  
+  const currentImageUrl = useMemo(() => {
+    if (!activePage) return '';
+    const attempt = imageAttempts[imageKey] || 0;
+    return getIllustrationUrl(activePage.illustrationPrompt, currentPageIndex, attempt);
+  }, [activePage, currentPageIndex, imageKey, imageAttempts, getIllustrationUrl]);
 
   return (
     <div className="relative min-h-screen pb-20">
