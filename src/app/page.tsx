@@ -136,7 +136,7 @@ export default function Home() {
   }, [interest]);
 
   // Compute absolute URL (uses 0-based page index to align keys correctly with watchdog!)
-  // STYLE CONSISTENCY: Flux Dev/Schnell model + concise locked style prompt + random/stable base seed.
+  // STYLE CONSISTENCY: Flux Schnell (Turbo) / Flux Dev model + stable unique seed.
   const getIllustrationUrl = useCallback((prompt: string, index: number, attempt = 0) => {
     const key = `${activeStory?.title || 'story'}-${index}`;
     
@@ -146,9 +146,8 @@ export default function Home() {
     
     if (!prompt) return getThemeFallbackUrl(index);
     
-    // 1. COMBINE STYLE AND SCENE PRECISELY (No truncation to preserve full details!)
-    const stylePrefix = "hand-drawn children's picture book illustration, cute cartoon style, soft watercolor and gouache, warm pastel colors, rounded friendly shapes, cozy storybook art, NOT a photograph";
-    const fullPrompt = `${stylePrefix}, ${prompt}`;
+    // 1. DIRECT PROMPT USAGE (Gemini generates highly structured, self-contained Flux prompts!)
+    const fullPrompt = prompt;
     
     // 2. VASTLY DIFFERENT SEED SPREAD
     // Use dynamic storySeed if available, else stable title hash. Multiply index to guarantee variance!
@@ -156,9 +155,9 @@ export default function Home() {
     const seed = baseSeed + index * 9973;
     
     // 3. TIERED MODEL RESOLUTION
-    // Attempt 0: flux (Flux Dev) - high quality, detailed
-    // Attempt 1: turbo (Flux Schnell) - fast, resilient fallback
-    const model = attempt === 0 ? 'flux' : 'turbo';
+    // Attempt 0: turbo (Flux Schnell) - lightning fast, snappy experience (loads in ~1.5s)
+    // Attempt 1: flux (Flux Dev) - high quality detailed fallback
+    const model = attempt === 0 ? 'turbo' : 'flux';
     
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=${model}`;
   }, [activeStory, imageErrors, getThemeFallbackUrl]);
@@ -291,27 +290,35 @@ export default function Home() {
     };
   }, []);
 
-  // Background Image Prefetch to render illustrations instantly
+  // JIT Image Prefetch: Pre-load only the current and the immediately next page to avoid rate-limiting and browser congestion
   useEffect(() => {
     if (activeStory) {
-      console.log(`[Prefetch] Pre-loading illustrations for pages...`);
-      activeStory.pages.forEach((page, idx) => {
-        const url = getIllustrationUrl(page.illustrationPrompt, idx, 0); // Preload attempt 0 (Flux Dev)
+      const pagesToLoad = [currentPageIndex, currentPageIndex + 1].filter(
+        idx => idx >= 0 && idx < activeStory.pages.length
+      );
+      
+      pagesToLoad.forEach((idx) => {
+        const page = activeStory.pages[idx];
         const pageKey = `${activeStory.title}-${idx}`;
-
-        // Create new image object in background to trigger dynamic generation and browser caching
+        
+        // If already marked as loaded, don't prefetch again
+        if (loadedImages[pageKey]) return;
+        
+        const attempt = imageAttempts[pageKey] || 0;
+        const url = getIllustrationUrl(page.illustrationPrompt, idx, attempt);
+        
         const img = new Image();
         img.src = url;
         img.onload = () => {
-          console.log(`[Prefetch] Successfully pre-loaded illustration for page ${idx + 1}`);
+          console.log(`[JIT Prefetch] Successfully loaded illustration for page ${idx + 1}`);
           setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         };
         img.onerror = () => {
-          console.warn(`[Prefetch] Failed to pre-load page ${idx + 1}. Browser will attempt to load it when active.`);
+          console.warn(`[JIT Prefetch] Failed to load illustration for page ${idx + 1}. Attempt: ${attempt}`);
         };
       });
     }
-  }, [activeStory, getIllustrationUrl]);
+  }, [activeStory, currentPageIndex, loadedImages, imageAttempts, getIllustrationUrl]);
 
 
 

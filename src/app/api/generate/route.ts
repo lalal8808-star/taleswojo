@@ -181,15 +181,14 @@ ${rawStoryText}
 [삽화 프롬프트 작성 지침 — 동화책 그림체 필수]
 1. [구도 다양화 및 소년 얼굴 클로즈업 금지 - 매우 중요]
    소년의 얼굴만 화면 가득 나오는 초상화나 클로즈업(portrait, close-up, face close-up) 구도는 절대 피하세요. 
-   대신 소년이 배경 속에 어우러져 있는 넓은 구도(wide shot, landscape scene, full body shot, medium long shot)를 사용하여, 주변 마법 같은 배경 환경과 사물들이 소년보다 더 넓은 비율로 화면을 채우도록 하세요.
-2. [프롬프트 구조 규칙 - 매우 중요]
-   반드시 각 프롬프트의 가장 앞에 '구체적인 행동과 공간 배경(Landscape/Scene/Action)'을 먼저 기술하세요. 주인공 캐릭터 묘사는 그 뒤에 덧붙여야 합니다.
-   - 예시 구조: [공간 배경 및 액션 묘사], featuring a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas, cartoon illustration style
-   - 예시 (올바른 사례): "Exploring a deep magical cave with glowing blue crystal pillars, holding a tiny golden key, featuring a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas, cartoon illustration style"
-3. 각 프롬프트는 해당 페이지의 이야기 내용(예: 아기 공룡을 만남, 폭풍우 속 비행, 우주를 향해 손 뻗기 등)과 정확히 일치하는 모험 장면을 구체적이고 이색적으로 묘사하여, 10개 페이지의 그림들이 시각적으로 확연히 다른 장면을 보여주게 하세요.
+   대신 소년이 배경 속에 작고 예쁘게 배치되는 넓은 구도(wide shot, landscape scene, full body shot, long shot)를 사용하여, 주변의 신비로운 마법 배경 환경과 다양한 사물들이 소년보다 훨씬 넓은 면적을 차지하도록 하세요. 소년은 전체 화면의 15% 이하 크기로 아주 작게 묘사되어야 합니다!
+2. [전문가 수준의 Flux 프롬프트 공식 준수 - 매우 중요]
+   각 페이지의 영어 프롬프트는 반드시 다음 공식 구조를 지키며 단어의 나열이 아닌 '자연스러운 한 줄의 영어 문장'으로 작성해 주세요:
+   "A whimsical watercolor children's book illustration of [구체적인 공간 배경 및 소년의 행동/액션], featuring a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas. Rendered in a soft watercolor and gouache style, warm pastel colors, soft diffused lighting, nostalgic storybook atmosphere, high detail."
+   - 예시 (완벽한 사례): "A whimsical watercolor children's book illustration of a child exploring a deep magical cave with glowing blue crystal pillars and holding a tiny golden key, featuring a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas. Rendered in a soft watercolor and gouache style, warm pastel colors, soft diffused lighting, nostalgic storybook atmosphere, high detail."
+3. 각 프롬프트는 해당 페이지의 이야기 내용(예: 아기 공룡을 만남, 별가루 구름 속 비행, 말하는 동물들과의 차 마시기 등)과 정확히 일치하는 독창적이고 구체적인 상황을 묘사하여, 10개 페이지의 그림들이 서로 완전히 다른 고유한 구도와 장면을 보여주게 하세요.
 4. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 작성해 주세요.
-5. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 합니다.
-6. 사진이나 실사 느낌이 아닌 동화책 그림체를 위해, 각 프롬프트 끝에 "cartoon illustration style"을 반드시 넣어 주세요.`;
+5. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 합니다.`;
 
         try {
           result = await generateObject({
