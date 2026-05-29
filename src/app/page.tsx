@@ -292,43 +292,8 @@ export default function Home() {
     };
   }, []);
 
-  // JIT Image Prefetch: Pre-load only the current and the immediately next page to avoid rate-limiting and browser congestion
-  useEffect(() => {
-    if (activeStory) {
-      const pagesToLoad = [currentPageIndex, currentPageIndex + 1].filter(
-        idx => idx >= 0 && idx < activeStory.pages.length
-      );
-      
-      pagesToLoad.forEach((idx) => {
-        const page = activeStory.pages[idx];
-        const pageKey = `${activeStory.title}-${idx}`;
-        
-        // 1. If already marked as loaded, don't prefetch again
-        if (loadedImages[pageKey]) return;
-        
-        // 2. If already actively loading in background, skip to avoid duplicate requests!
-        if (prefetchActiveRefs.current[pageKey]) return;
-        
-        const attempt = imageAttempts[pageKey] || 0;
-        const url = getIllustrationUrl(page.illustrationPrompt, idx, attempt);
-        
-        // Mark as actively loading
-        prefetchActiveRefs.current[pageKey] = true;
-        
-        const img = new Image();
-        img.src = url;
-        img.onload = () => {
-          console.log(`[JIT Prefetch] Successfully loaded illustration for page ${idx + 1}`);
-          prefetchActiveRefs.current[pageKey] = false; // Reset active state
-          setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
-        };
-        img.onerror = () => {
-          console.warn(`[JIT Prefetch] Failed to load illustration for page ${idx + 1}. Attempt: ${attempt}`);
-          prefetchActiveRefs.current[pageKey] = false; // Reset active state
-        };
-      });
-    }
-  }, [activeStory, currentPageIndex, loadedImages, imageAttempts, getIllustrationUrl]);
+  // JIT Image Prefetch disabled to ensure 100% stable single-image loading on Pollinations SANA model.
+  // This guarantees zero parallel request collisions or CDN fallback placeholder bugs.
 
 
 

@@ -181,12 +181,12 @@ ${rawStoryText}
 [삽화 프롬프트 작성 지침 — 동화책 그림체 필수]
 1. [구도 다양화 및 소년 얼굴 클로즈업 금지 - 매우 중요]
    소년의 얼굴만 화면 가득 나오는 초상화나 클로즈업(portrait, close-up, face close-up) 구도는 절대 피하세요. 
-   대신 소년이 배경 속에 작고 예쁘게 배치되는 넓은 구도(wide shot, landscape scene, full body shot, long shot)를 사용하여, 주변의 신비로운 마법 배경 환경과 다양한 사물들이 소년보다 훨씬 넓은 면적을 차지하도록 하세요. 소년은 전체 화면의 15% 이하 크기로 아주 작게 묘사되어야 합니다!
-2. [전문가 수준의 Flux 프롬프트 공식 준수 - 매우 중요]
-   각 페이지의 영어 프롬프트는 반드시 다음 공식 구조를 지키며 단어의 나열이 아닌 '자연스러운 한 줄의 영어 문장'으로 작성해 주세요:
-   "A whimsical watercolor children's book illustration of [구체적인 공간 배경 및 소년의 행동/액션], featuring a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas. Rendered in a soft watercolor and gouache style, warm pastel colors, soft diffused lighting, nostalgic storybook atmosphere, high detail."
-   - 예시 (완벽한 사례): "A whimsical watercolor children's book illustration of a child exploring a deep magical cave with glowing blue crystal pillars and holding a tiny golden key, featuring a small cute cartoon child with short black hair, big round eyes, rosy cheeks, wearing blue star pajamas. Rendered in a soft watercolor and gouache style, warm pastel colors, soft diffused lighting, nostalgic storybook atmosphere, high detail."
-3. 각 프롬프트는 해당 페이지의 이야기 내용(예: 아기 공룡을 만남, 별가루 구름 속 비행, 말하는 동물들과의 차 마시기 등)과 정확히 일치하는 독창적이고 구체적인 상황을 묘사하여, 10개 페이지의 그림들이 서로 완전히 다른 고유한 구도와 장면을 보여주게 하세요.
+   대신 소년이 배경 속에 아주 작고 예쁘게 배치되는 넓은 풍경 구도(wide shot, landscape scene, full body shot, scenic shot)를 사용하여, 주변의 신비로운 마법 배경 환경(은하수 다리, 별자리, 공룡 숲 등)이 화면의 대부분을 차지하도록 하세요. 소년은 전체 화면의 10% 이하 크기로 작게 조화되어야 합니다!
+2. [Flux 및 SANA 엔진 최적화 프롬프트 문장 공식 준수 - 매우 중요]
+   각 페이지의 영어 프롬프트는 단어의 나열이 아닌 자연스럽고 심플한 '한 줄의 영어 문장'으로 작성해 주세요. 불필요하고 중복되는 스타일 미사여구는 빼고, 핵심 행동과 캐릭터 묘사만 아래 공식으로 정확히 35단어 내외로 콤팩트하게 표현해 주세요:
+   "A whimsical children's book illustration of [구체적인 공간 배경 및 소년의 행동/액션], featuring a cute cartoon child with short black hair, wearing blue star pajamas, watercolor style."
+   - 예시 (완벽한 사례): "A whimsical children's book illustration of a child crossing a glowing Milky Way bridge under a meteor shower, featuring a cute cartoon child with short black hair, wearing blue star pajamas, watercolor style."
+3. 각 프롬프트는 해당 페이지의 이야기 내용과 정확히 일치하는 독창적이고 구체적인 상황을 묘사하여, 10개 페이지의 그림들이 서로 완전히 다른 고유한 구도와 장면을 보여주게 하세요.
 4. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 작성해 주세요.
 5. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 합니다.`;
 
