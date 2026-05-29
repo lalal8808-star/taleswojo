@@ -115,6 +115,7 @@ export default function Home() {
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const imageTimeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const prefetchActiveRefs = useRef<Record<string, boolean>>({});
 
   // Theme Fallback selection based on interests keywords (uses index to select)
   const getThemeFallbackUrl = useCallback((index: number) => {
@@ -301,20 +302,28 @@ export default function Home() {
         const page = activeStory.pages[idx];
         const pageKey = `${activeStory.title}-${idx}`;
         
-        // If already marked as loaded, don't prefetch again
+        // 1. If already marked as loaded, don't prefetch again
         if (loadedImages[pageKey]) return;
+        
+        // 2. If already actively loading in background, skip to avoid duplicate requests!
+        if (prefetchActiveRefs.current[pageKey]) return;
         
         const attempt = imageAttempts[pageKey] || 0;
         const url = getIllustrationUrl(page.illustrationPrompt, idx, attempt);
+        
+        // Mark as actively loading
+        prefetchActiveRefs.current[pageKey] = true;
         
         const img = new Image();
         img.src = url;
         img.onload = () => {
           console.log(`[JIT Prefetch] Successfully loaded illustration for page ${idx + 1}`);
+          prefetchActiveRefs.current[pageKey] = false; // Reset active state
           setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
         };
         img.onerror = () => {
           console.warn(`[JIT Prefetch] Failed to load illustration for page ${idx + 1}. Attempt: ${attempt}`);
+          prefetchActiveRefs.current[pageKey] = false; // Reset active state
         };
       });
     }
@@ -352,6 +361,7 @@ export default function Home() {
     setLoadedImages({});
     setImageErrors({});
     setImageAttempts({});
+    prefetchActiveRefs.current = {};
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -688,6 +698,7 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
     setLoadedImages({});
     setImageErrors({});
     setImageAttempts({});
+    prefetchActiveRefs.current = {};
     
     const bookEl = document.getElementById('storybook');
     if (bookEl) {
