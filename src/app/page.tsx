@@ -217,8 +217,9 @@ export default function Home() {
       
       if (!isLoaded && !hasError) {
         const attempt = imageAttempts[pageKey] || 0;
-        // Wait 25 seconds for attempt 0 (Flux Dev), and 10 seconds for attempt 1 (Flux Schnell/turbo)
-        const timeoutDuration = attempt === 0 ? 25000 : 10000;
+        // Resilient timeout for heavy model generation (model=sana/flux takes 15-40s on first load)
+        // Wait 60 seconds for attempt 0, and 40 seconds for attempt 1
+        const timeoutDuration = attempt === 0 ? 60000 : 40000;
         
         imageTimeoutTimerRef.current = setTimeout(() => {
           if (!loadedImages[pageKey] && !imageErrors[pageKey]) {
@@ -1147,11 +1148,18 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
                           fontSize: '0.9rem', 
                           display: 'flex', 
                           flexDirection: 'column',
-                          gap: '12px', 
-                          alignItems: 'center' 
+                          gap: '14px', 
+                          alignItems: 'center',
+                          padding: '0 20px',
+                          textAlign: 'center'
                         }}>
-                          <RefreshCw className="animate-spin text-secondary" size={24} />
-                          <span className="animate-pulse" style={{ fontFamily: 'var(--font-title)' }}>밤별빛으로 도화지 채우는 중...</span>
+                          <RefreshCw className="animate-spin text-secondary" size={28} />
+                          <span className="animate-pulse" style={{ fontFamily: 'var(--font-title)', fontSize: '1.1rem', fontWeight: 'bold' }}>
+                            밤별빛으로 도화지 채우는 중...
+                          </span>
+                          <span style={{ fontSize: '0.8rem', opacity: 0.8, maxWidth: '280px', lineHeight: '1.4' }}>
+                            처음 그리는 마법 그림은 요정들이 물감을 칠하는 데 약 15~30초가 소요됩니다. 조금만 기다려 주시면 예쁜 그림이 나타나요! ✨
+                          </span>
                         </div>
                       )}
                     </>
