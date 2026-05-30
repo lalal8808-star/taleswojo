@@ -108,6 +108,7 @@ export default function Home() {
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [imageAttempts, setImageAttempts] = useState<Record<string, number>>({});
+  const [currentPreloadIndex, setCurrentPreloadIndex] = useState<number | null>(null);
   
   const abortControllerRef = useRef<AbortController | null>(null);
   const isSpeakingRef = useRef(false);
@@ -292,8 +293,51 @@ export default function Home() {
     };
   }, []);
 
-  // JIT Image Prefetch disabled to ensure 100% stable single-image loading on Pollinations SANA model.
-  // This guarantees zero parallel request collisions or CDN fallback placeholder bugs.
+  // Controlled Sequential Image Preloader: Loads images one-by-one to avoid concurrent rate-limits and cache hits!
+  useEffect(() => {
+    if (activeStory && currentPreloadIndex !== null && currentPreloadIndex < activeStory.pages.length) {
+      const idx = currentPreloadIndex;
+      const page = activeStory.pages[idx];
+      const pageKey = `${activeStory.title}-${idx}`;
+      
+      // If already marked as loaded, skip to the next page immediately!
+      if (loadedImages[pageKey]) {
+        setCurrentPreloadIndex(idx + 1);
+        return;
+      }
+      
+      // If already marked as failed (errored), skip to the next page immediately!
+      if (imageErrors[pageKey]) {
+        setCurrentPreloadIndex(idx + 1);
+        return;
+      }
+      
+      console.log(`[Sequential Preload] Loading page ${idx + 1}/${activeStory.pages.length}...`);
+      const attempt = imageAttempts[pageKey] || 0;
+      const url = getIllustrationUrl(page.illustrationPrompt, idx, attempt);
+      
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        console.log(`[Sequential Preload] Successfully loaded page ${idx + 1}`);
+        setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
+        setCurrentPreloadIndex(idx + 1); // Trigger next page preloading!
+      };
+      img.onerror = () => {
+        console.warn(`[Sequential Preload] Failed to load page ${idx + 1} on attempt ${attempt}.`);
+        const nextAttempt = attempt + 1;
+        if (nextAttempt <= 1) {
+          // Retry attempt 1 immediately
+          setImageAttempts(prev => ({ ...prev, [pageKey]: nextAttempt }));
+        } else {
+          // Both failed, mark as error and advance
+          setImageErrors(prev => ({ ...prev, [pageKey]: true }));
+          setLoadedImages(prev => ({ ...prev, [pageKey]: true }));
+          setCurrentPreloadIndex(idx + 1); // Advance to next page!
+        }
+      };
+    }
+  }, [activeStory, currentPreloadIndex, loadedImages, imageErrors, imageAttempts, getIllustrationUrl]);
 
 
 
@@ -328,6 +372,7 @@ export default function Home() {
     setImageErrors({});
     setImageAttempts({});
     prefetchActiveRefs.current = {};
+    setCurrentPreloadIndex(null);
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -360,6 +405,7 @@ export default function Home() {
       const storySeed = Math.floor(Math.random() * 1000000);
       const storyWithSeed = { ...data, storySeed };
       setActiveStory(storyWithSeed);
+      setCurrentPreloadIndex(0); // Start sequential preloading!
 
       const newStory: StoryHistoryItem = {
         id: Date.now().toString(),
@@ -665,6 +711,7 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
     setImageErrors({});
     setImageAttempts({});
     prefetchActiveRefs.current = {};
+    setCurrentPreloadIndex(0); // Start preloading sequential pages!
     
     const bookEl = document.getElementById('storybook');
     if (bookEl) {
