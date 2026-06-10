@@ -83,7 +83,7 @@ export async function GET(req: Request) {
     const uint8Array = imageFiles[0].uint8Array;
     const mediaType = imageFiles[0].mediaType || 'image/png';
     
-    return new Response(uint8Array, {
+    return new Response(Buffer.from(uint8Array), {
       headers: {
         'Content-Type': mediaType,
         'Cache-Control': 'public, max-age=31536000, immutable', // Cache heavily
