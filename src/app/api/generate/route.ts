@@ -111,47 +111,18 @@ export async function POST(req: Request) {
         throw new Error('Google Gemini API Key is missing. Cannot generate story.');
       }
       
-      console.log(`[1/2] Generating original story from Google Gemini (Production optimized)... (Child: ${name})`);
+      console.log(`[1/2] Generating original story from Google Gemini 3.5 Flash... (Child: ${name})`);
       
-      let storyResponse;
-      try {
-        // Try gemini-2.0-flash first as the most reliable default production model
-        storyResponse = await generateText({
-          model: google('gemini-2.0-flash'),
-          prompt: storyPrompt,
-          temperature: 0.7,
-          maxOutputTokens: 5000,
-        });
-        usedModel = 'Google Gemini 2.0 Flash';
-      } catch (err) {
-        console.warn('Gemini 2.0 Flash failed, trying Gemini 1.5 Flash...', err);
-        try {
-          storyResponse = await generateText({
-            model: google('gemini-1.5-flash'),
-            prompt: storyPrompt,
-            temperature: 0.7,
-            maxOutputTokens: 1500,
-          });
-          usedModel = 'Google Gemini 1.5 Flash';
-        } catch (err2) {
-          console.warn('Gemini 1.5 Flash failed, falling back to Gemini 2.5 Flash...', err2);
-          try {
-            storyResponse = await generateText({
-              model: google('gemini-2.5-flash'),
-              prompt: storyPrompt,
-              temperature: 0.7,
-              maxOutputTokens: 1500,
-            });
-            usedModel = 'Google Gemini 2.5 Flash';
-          } catch (err3) {
-            console.error('All Gemini model text generation attempts failed.', err3);
-            throw err3;
-          }
-        }
-      }
+      const storyResponse = await generateText({
+        model: google('gemini-3.5-flash'),
+        prompt: storyPrompt,
+        temperature: 0.7,
+        maxOutputTokens: 5000,
+      });
+      usedModel = 'Google Gemini 3.5 Flash';
       
       rawStoryText = storyResponse.text;
-      console.log(`[1/2] Google Gemini story generation complete using ${usedModel}! Length:`, rawStoryText.length);
+      console.log(`[1/2] Google Gemini story generation complete! Length:`, rawStoryText.length);
     }
 
     // Step 2: Page division and Illustration prompt generation using Google Gemini
@@ -182,41 +153,26 @@ export async function POST(req: Request) {
 [한국어 동화 원본]
 ${rawStoryText}
 
-[삽화 프롬프트 작성 지침 — 동화책 그림체 필수]
-1. [구도 다양화 및 소년 얼굴 클로즈업 절대 금지 - 최우선 순위]
-   소년의 얼굴이나 전신 초상화 구도는 **절대 피하세요.** 소년의 인물 자체를 묘사하는 문장은 프롬프트에서 **완전히 제거**해야 합니다.
-   대신 페이지의 마법 같은 비주얼 배경과 대자연 풍경(우주선, 은하수 다리, 반짝이는 별자리 언덕, 신비한 버섯 숲 등)을 화면 가득 채워 그리도록 구성하세요.
-2. [Flux 및 SANA 엔진 최적화 프롬프트 문장 공식 준수 - 매우 중요]
-   각 페이지의 영어 프롬프트는 단어의 나열이 아닌 자연스럽고 심플한 '한 줄의 영어 문장'으로 작성해 주세요. 불필요하고 중복되는 스타일 미사여구는 빼고, 오직 마법 같은 풍경과 공간을 묘사하는 아래 공식으로만 작성해 주세요:
-   "A whimsical watercolor children's book illustration of [구체적인 마법 공간 배경 및 풍경 묘사], beautiful fairytale scenery, warm pastel colors, nostalgic storybook style."
-   - 예시 (완벽한 사례): "A whimsical watercolor children's book illustration of a glowing Milky Way bridge under a meteor shower in a purple starry space, beautiful fairytale scenery, warm pastel colors, nostalgic storybook style."
+[삽화 프롬프트 작성 지침 — 동화책 그림체 및 캐릭터 일관성 필수]
+1. [주인공 캐릭터의 시각적 일관성 유지 - 최우선 순위]
+   동화책의 전체적인 몰입도를 위해 모든 페이지의 삽화에 등장하는 주인공 아이는 기본적으로 아래의 외모적 특징을 지닌 동일 인물이어야 합니다.
+   - 기본 외모 및 의상: "a cute 5-year-old Korean boy with short black hair, wearing warm yellow star-patterned pajamas" (단발머리에 노란 별 잠옷을 입은 5세 한국 남자아이)
+   - [의상 일치 및 변경 예외 규칙]: 동화 본문 내용상 주인공이 옷을 다른 것으로 갈아입었다는 명시적인 설명(예: '반짝이는 우주복을 든든하게 챙겨 입었어요', '노란 비옷을 입고 장화를 신었어요')이 있는 페이지라면 해당 상황에 맞는 의상으로 변경하되, 그렇지 않고 단순히 모험을 떠나거나 행동하는 일반적인 페이지에서는 항상 기본 의상인 "warm yellow star-patterned pajamas"로 주인공의 의상을 완전히 일치시켜서 일관되게 그려야 합니다.
+   - 매 페이지의 프롬프트에서 주인공을 그릴 때는 위의 기본 외모/의상 문구(또는 의상 변경 예외 묘사)를 주어로 사용하여 캐릭터의 외모적 일관성을 확실히 확보하세요.
+2. [문장 공식 준수 - 매우 중요]
+   각 페이지의 영어 프롬프트는 단어의 나열이 아닌 자연스럽고 심플한 '한 줄의 영어 문장'으로 작성해 주세요. 불필요하고 중복되는 스타일 미사여구는 빼고, 오직 마법 같은 풍경과 아래 공식으로만 작성해 주세요:
+   "A whimsical watercolor children's book illustration of a cute 5-year-old Korean boy with short black hair wearing warm yellow star-patterned pajamas [해당 페이지의 공간 배경 및 구체적인 행동 묘사], beautiful fairytale scenery, warm pastel colors, nostalgic storybook style."
+   - (의상이 명시적으로 바뀐 페이지의 경우 'wearing warm yellow star-patterned pajamas' 대신 변경된 의상 묘사를 넣으세요)
+   - 예시 (완벽한 사례): "A whimsical watercolor children's book illustration of a cute 5-year-old Korean boy with short black hair wearing warm yellow star-patterned pajamas walking along a glowing Milky Way bridge under a purple starry space, beautiful fairytale scenery, warm pastel colors, nostalgic storybook style."
 3. 각 프롬프트는 해당 페이지의 이야기 내용과 정확히 일치하는 독창적이고 구체적인 상황을 묘사하여, 10개 페이지의 그림들이 서로 완전히 다른 고유한 구도와 장면을 보여주게 하세요.
 4. 절대로 한글 문자(Korean characters)를 섞지 말고, 100% 영어(Pure English)로만 작성해 주세요.
 5. 그림에 글자, 알파벳, 자막, 텍스트(text, letters, words, writing)는 절대 보이지 않아야 합니다.`;
 
-        try {
-          result = await generateObject({
-            model: google('gemini-2.0-flash'),
-            schema: objectSchema,
-            prompt: objectPrompt,
-          });
-        } catch (err) {
-          console.warn('Gemini 2.0 Flash object generation failed, trying Gemini 1.5 Flash...', err);
-          try {
-            result = await generateObject({
-              model: google('gemini-1.5-flash'),
-              schema: objectSchema,
-              prompt: objectPrompt,
-            });
-          } catch (err2) {
-            console.warn('Gemini 1.5 Flash object generation failed, falling back to Gemini 2.5 Flash...', err2);
-            result = await generateObject({
-              model: google('gemini-2.5-flash'),
-              schema: objectSchema,
-              prompt: objectPrompt,
-            });
-          }
-        }
+        result = await generateObject({
+          model: google('gemini-3.5-flash'),
+          schema: objectSchema,
+          prompt: objectPrompt,
+        });
 
         // Clean & sanitize all prompts
         const sanitizedPages = result.object.pages.map(page => ({
@@ -315,7 +271,7 @@ ${rawStoryText}
     
     for (let i = 0; i < pagesCount; i++) {
       const pageText = expandedParagraphs[i] || '오늘 밤도 깊은 행복 속에서 별빛 이불을 덮고 예쁜 꿈을 꿉니다.';
-      const promptDescription = `cute lovely child exploring ${safeTopicKeyword}, ${pageStages[i % pageStages.length]}`;
+      const promptDescription = `A whimsical watercolor children's book illustration of a cute 5-year-old Korean boy with short black hair wearing warm yellow star-patterned pajamas exploring ${safeTopicKeyword}, ${pageStages[i % pageStages.length]}, beautiful fairytale scenery, warm pastel colors, nostalgic storybook style`;
       
       pages.push({
         pageNumber: i + 1,
@@ -338,7 +294,7 @@ ${rawStoryText}
     console.error('Error generating story:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to generate story. Please verify your settings and API keys.',
+        error: '동화 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
         details: error.message 
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

@@ -148,21 +148,9 @@ export default function Home() {
     
     if (!prompt) return getThemeFallbackUrl(index);
     
-    // 1. DIRECT PROMPT USAGE (Gemini generates highly structured, self-contained Flux prompts!)
-    const fullPrompt = prompt;
-    
-    // 2. VASTLY DIFFERENT SEED SPREAD
-    // Use dynamic storySeed if available, else stable title hash. Multiply index to guarantee variance!
-    const baseSeed = activeStory?.storySeed || (activeStory?.title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) * 137 + 1000;
-    const seed = baseSeed + index * 9973;
-    
-    // 3. TIERED MODEL RESOLUTION
-    // Attempt 0: turbo (Flux Schnell) - lightning fast, snappy experience (loads in ~1.5s)
-    // Attempt 1: flux (Flux Dev) - high quality detailed fallback
-    const model = attempt === 0 ? 'turbo' : 'flux';
-    
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=800&height=600&nologo=true&seed=${seed}&model=${model}`;
-  }, [activeStory, imageErrors, getThemeFallbackUrl]);
+    // Fetch via local Google Imagen 3 API proxy with Unsplash redirect failover
+    return `/api/illustration?prompt=${encodeURIComponent(prompt)}&index=${index}&interest=${encodeURIComponent(interest)}`;
+  }, [activeStory, imageErrors, interest, getThemeFallbackUrl]);
 
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
@@ -562,17 +550,17 @@ export default function Home() {
     setIsPaused(false);
   };
 
-  // Print Booklet: A4 landscape folded in half → saddle-stitched A5 picture book
+  // Print Photo Book: Each page prints as a 4×6 inch (102×152mm) photo card
   const handlePrintBooklet = () => {
     if (!activeStory) return;
 
     // 1. Build logical page contents
-    type BookPage = { type: 'cover' | 'story' | 'back' | 'blank'; title?: string; text?: string; imageUrl?: string; pageLabel?: string };
-    const bookPages: BookPage[] = [];
+    type PhotoPage = { type: 'cover' | 'story' | 'back'; title?: string; text?: string; imageUrl?: string; pageLabel?: string };
+    const photoPages: PhotoPage[] = [];
 
     // Cover page
     const coverKey = `${activeStory.title}-0`;
-    bookPages.push({
+    photoPages.push({
       type: 'cover',
       title: activeStory.title,
       imageUrl: getIllustrationUrl(activeStory.pages[0].illustrationPrompt, 0, imageAttempts[coverKey] || 0),
@@ -581,7 +569,7 @@ export default function Home() {
     // Story pages
     activeStory.pages.forEach((page, idx) => {
       const pageKey = `${activeStory.title}-${idx}`;
-      bookPages.push({
+      photoPages.push({
         type: 'story',
         text: page.text,
         imageUrl: getIllustrationUrl(page.illustrationPrompt, idx, imageAttempts[pageKey] || 0),
@@ -590,99 +578,135 @@ export default function Home() {
     });
 
     // Back cover
-    bookPages.push({ type: 'back', title: '끝' });
+    photoPages.push({ type: 'back', title: '끝' });
 
-    // Pad to multiple of 4 (required for saddle-stitch booklet)
-    while (bookPages.length % 4 !== 0) {
-      bookPages.push({ type: 'blank' });
-    }
-
-    const totalPages = bookPages.length;
-    const totalSheets = totalPages / 4;
-
-    // 2. Booklet imposition ordering
-    // Each A4 landscape sheet has front (left|right) and back (left|right)
-    // When nested and folded, pages read sequentially.
-    const printSides: Array<{ leftIdx: number; rightIdx: number }> = [];
-    for (let s = 0; s < totalSheets; s++) {
-      // Front of sheet
-      printSides.push({ leftIdx: totalPages - 1 - 2 * s, rightIdx: 2 * s });
-      // Back of sheet
-      printSides.push({ leftIdx: 2 * s + 1, rightIdx: totalPages - 2 - 2 * s });
-    }
-
-    // 3. Render half-page content
-    const renderHalf = (pg: BookPage): string => {
-      if (pg.type === 'blank') {
-        return '<div class="half"></div>';
-      }
+    // 2. Render each page as a 4x6 photo card
+    const renderPage = (pg: PhotoPage): string => {
       if (pg.type === 'cover') {
-        return `<div class="half cover">
-          ${pg.imageUrl ? `<img src="${pg.imageUrl}" class="cover-img" />` : ''}
-          <h1 class="cover-title">${pg.title || ''}</h1>
-          <p class="cover-author">주인공: ${name || '아이'}</p>
-          <p class="cover-date">${new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        return `<div class="photo-page cover-page">
+          ${pg.imageUrl ? `<img src="${pg.imageUrl}" class="bg-img" />` : ''}
+          <div class="cover-overlay">
+            <h1 class="cover-title">${pg.title || ''}</h1>
+            <p class="cover-author">주인공: ${name || '아이'}</p>
+            <p class="cover-date">${new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          </div>
         </div>`;
       }
       if (pg.type === 'back') {
-        return `<div class="half back">
-          <div class="back-deco">🌙✨</div>
-          <h2 class="back-title">— 끝 —</h2>
-          <p class="back-sub">오늘 밤도 행복한 꿈 꾸세요 💤</p>
+        return `<div class="photo-page back-page">
+          <div class="back-content">
+            <div class="back-deco">🌙✨</div>
+            <h2 class="back-title">— 끝 —</h2>
+            <p class="back-sub">오늘 밤도 행복한 꿈 꾸세요 💤</p>
+          </div>
         </div>`;
       }
-      // Story page
-      return `<div class="half story">
-        ${pg.imageUrl ? `<img src="${pg.imageUrl}" class="story-img" />` : ''}
-        <div class="story-text">${pg.text || ''}</div>
-        <div class="page-num">${pg.pageLabel || ''}</div>
+      // Story page — image fills top, text at bottom
+      return `<div class="photo-page story-page">
+        ${pg.imageUrl ? `<img src="${pg.imageUrl}" class="story-img" />` : '<div class="story-img-placeholder"></div>'}
+        <div class="story-text-area">
+          <div class="story-text">${pg.text || ''}</div>
+          <div class="page-num">${pg.pageLabel || ''}</div>
+        </div>
       </div>`;
     };
 
-    // 4. Build sheet sides HTML
-    let sheetsHtml = '';
-    printSides.forEach((side) => {
-      sheetsHtml += `<div class="sheet">
-        ${renderHalf(bookPages[side.leftIdx])}
-        <div class="fold"></div>
-        ${renderHalf(bookPages[side.rightIdx])}
-      </div>`;
+    // 3. Build all pages HTML
+    let pagesHtml = '';
+    photoPages.forEach((pg) => {
+      pagesHtml += renderPage(pg);
     });
 
-    // 5. Full print document
+    // 4. Full print document — 4x6 inch photo size
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>${activeStory.title} - 그림 동화책 출력</title>
+<title>${activeStory.title} - 4×6 사진 동화책 출력</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
-@page{size:A4 landscape;margin:0;}
+@page{size:4in 6in;margin:0;}
 body{font-family:'Gaegu','Noto Sans KR',sans-serif;background:#f5f0eb;}
-.sheet{width:297mm;height:210mm;display:flex;position:relative;page-break-after:always;background:#fff;}
-.sheet:last-child{page-break-after:auto;}
-.fold{width:0;height:100%;border-left:1.5px dashed #ccc;flex-shrink:0;}
-.half{width:148.5mm;height:210mm;padding:8mm 10mm;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
-/* Cover */
-.cover{background:linear-gradient(160deg,#fef9ef,#fce4ec);gap:3mm;}
-.cover-img{width:105mm;height:78mm;object-fit:cover;border-radius:4mm;border:2px solid #f8bbd0;box-shadow:0 2mm 6mm rgba(0,0,0,.08);}
-.cover-title{font-size:20pt;font-weight:700;color:#4a148c;text-align:center;line-height:1.4;margin-top:3mm;}
-.cover-author{font-size:11pt;color:#7b1fa2;}
-.cover-date{font-size:9pt;color:#9e9e9e;}
-/* Story */
-.story{gap:2mm;justify-content:flex-start;padding-top:6mm;}
-.story-img{width:128mm;height:82mm;object-fit:cover;border-radius:3mm;border:1.5px solid #e1bee7;box-shadow:0 1mm 4mm rgba(0,0,0,.06);}
-.story-text{font-size:10.5pt;line-height:1.75;color:#333;text-align:justify;padding:2mm 4mm 0;flex:1;overflow:hidden;word-break:keep-all;}
-.page-num{font-size:9pt;color:#aaa;margin-top:auto;padding-bottom:2mm;}
-/* Back */
-.back{background:linear-gradient(160deg,#e8eaf6,#fce4ec);gap:5mm;}
-.back-deco{font-size:36pt;}
-.back-title{font-size:22pt;font-weight:700;color:#4a148c;}
-.back-sub{font-size:12pt;color:#7b1fa2;}
+
+/* Each photo page: exactly 4x6 inches */
+.photo-page{
+  width:4in;height:6in;
+  position:relative;overflow:hidden;
+  page-break-after:always;
+  background:#fff;
+}
+.photo-page:last-child{page-break-after:auto;}
+
+/* === COVER === */
+.cover-page{display:flex;align-items:center;justify-content:center;}
+.cover-page .bg-img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:cover;filter:brightness(0.55) saturate(1.2);
+}
+.cover-overlay{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:20px;text-align:center;
+}
+.cover-title{
+  font-size:18pt;font-weight:700;color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,0.6),0 0 30px rgba(167,139,250,0.4);
+  line-height:1.35;max-width:3.4in;
+}
+.cover-author{font-size:10pt;color:#e8d5f5;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.cover-date{font-size:8pt;color:#d1c4e9;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
+
+/* === STORY === */
+.story-page{display:flex;flex-direction:column;position:relative;}
+.story-img{
+  width:100%;height:3.8in;
+  object-fit:cover;display:block;
+  border-bottom:2px solid #f3e5f5;
+}
+.story-img-placeholder{
+  width:100%;height:3.8in;
+  background:linear-gradient(135deg,#ede7f6,#fce4ec);
+}
+.story-text-area{
+  position:absolute;
+  bottom:0;
+  left:0;
+  right:0;
+  height:2.2in;
+  padding:8px 12px 6px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  background:linear-gradient(180deg,#fffdf9,#fef9ef);
+  box-sizing:border-box;
+  overflow:hidden;
+}
+.story-text{
+  font-size:9.5pt;line-height:1.4;color:#333;
+  word-break:keep-all;
+}
+.page-num{font-size:7pt;color:#bbb;text-align:center;padding-top:2px;}
+
+/* === BACK === */
+.back-page{
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#e8eaf6,#fce4ec);
+}
+.back-content{text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;}
+.back-deco{font-size:28pt;}
+.back-title{font-size:18pt;font-weight:700;color:#4a148c;}
+.back-sub{font-size:10pt;color:#7b1fa2;}
+
 /* Loading bar (screen only) */
 .bar{position:fixed;top:0;left:0;right:0;padding:14px;background:#4a148c;color:#fff;text-align:center;font-family:'Noto Sans KR',sans-serif;font-size:14px;z-index:999;}
 @media print{.bar{display:none;}}
+
+/* Screen preview: center pages with slight shadow */
+@media screen{
+  body{display:flex;flex-direction:column;align-items:center;gap:16px;padding:60px 16px 32px;}
+  .photo-page{box-shadow:0 4px 20px rgba(0,0,0,0.15);border-radius:4px;}
+}
 </style></head><body>
-<div class="bar" id="bar">📖 그림을 불러오는 중... 잠시만 기다려 주세요</div>
-${sheetsHtml}
+<div class="bar" id="bar">📖 4×6 사진 크기로 준비 중... 잠시만 기다려 주세요</div>
+${pagesHtml}
 <script>
 const imgs=document.querySelectorAll('img');let loaded=0;const total=imgs.length;
 function done(){document.getElementById('bar').textContent='✅ 준비 완료! 인쇄 창이 열립니다...';setTimeout(()=>window.print(),800);}
@@ -1111,98 +1135,122 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
                 <h2 className="story-title" style={{ fontSize: '2rem' }}>✨ {activeStory.title}</h2>
               </div>
 
-              {/* TWO PANEL BEDTIME STORY BOOK LAYOUT */}
+              {/* 4×6 PHOTO CARD LAYOUT — matches print output */}
               <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr',
-                gap: '24px',
+                display: 'flex',
+                justifyContent: 'center',
                 flex: 1,
-                alignItems: 'center'
-              }} className="md:grid-cols-2">
-                
-                {/* 1. Illustration Panel (No words child aesthetic) */}
+                alignItems: 'center',
+                padding: '10px 0'
+              }}>
                 <div style={{
-                  position: 'relative',
                   width: '100%',
-                  aspectRatio: '4/3',
-                  borderRadius: '16px',
+                  maxWidth: '400px',
+                  aspectRatio: '4/6',
+                  borderRadius: '12px',
                   overflow: 'hidden',
-                  background: 'linear-gradient(135deg, #1e1b4b, #311042)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}>
-                  {activePage.illustrationPrompt || imageErrors[imageKey] ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        key={imageKey}
-                        src={currentImageUrl} 
-                        alt="Bedtime story illustration"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          opacity: isImageLoaded ? 1 : 0.02,
-                          transition: 'opacity 0.6s ease-in-out'
-                        }}
-                        onLoad={() => handleImageLoad(imageKey)}
-                        onError={() => handleImageError(imageKey)}
-                      />
-                      
-                      {/* Magical soft glowing loader until loaded */}
-                      {!isImageLoaded && (
-                        <div style={{ 
-                          position: 'absolute', 
-                          color: 'var(--color-secondary)', 
-                          fontSize: '0.9rem', 
-                          display: 'flex', 
-                          flexDirection: 'column',
-                          gap: '14px', 
-                          alignItems: 'center',
-                          padding: '0 20px',
-                          textAlign: 'center'
-                        }}>
-                          <RefreshCw className="animate-spin text-secondary" size={28} />
-                          <span className="animate-pulse" style={{ fontFamily: 'var(--font-title)', fontSize: '1.1rem', fontWeight: 'bold' }}>
-                            밤별빛으로 도화지 채우는 중...
-                          </span>
-                          <span style={{ fontSize: '0.8rem', opacity: 0.8, maxWidth: '280px', lineHeight: '1.4' }}>
-                            처음 그리는 마법 그림은 요정들이 물감을 칠하는 데 약 15~30초가 소요됩니다. 조금만 기다려 주시면 예쁜 그림이 나타나요! ✨
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>일러스트를 기획하지 못했습니다.</div>
-                  )}
-                </div>
-
-                {/* 2. Text Panel */}
-                <div style={{
+                  background: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(167,139,250,0.15)',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'center',
-                  minHeight: '150px'
+                  position: 'relative'
                 }}>
+                  {/* Top: Illustration — 63% of card */}
                   <div style={{
-                    fontSize: '1.25rem',
-                    lineHeight: '1.9',
-                    color: 'var(--color-text-primary)',
-                    fontFamily: 'var(--font-title)',
-                    whiteSpace: 'pre-wrap',
-                    textShadow: '0 1px 4px rgba(0,0,0,0.3)',
-                    letterSpacing: '0.5px'
+                    position: 'relative',
+                    width: '100%',
+                    height: '63%',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(135deg, #1e1b4b, #311042)',
+                    flexShrink: 0
                   }}>
-                    {activePage.text}
+                    {activePage.illustrationPrompt || imageErrors[imageKey] ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          key={imageKey}
+                          src={currentImageUrl} 
+                          alt="Bedtime story illustration"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            opacity: isImageLoaded ? 1 : 0.02,
+                            transition: 'opacity 0.6s ease-in-out'
+                          }}
+                          onLoad={() => handleImageLoad(imageKey)}
+                          onError={() => handleImageError(imageKey)}
+                        />
+                        
+                        {/* Loading indicator */}
+                        {!isImageLoaded && (
+                          <div style={{ 
+                            position: 'absolute', 
+                            inset: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px', 
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--color-secondary)',
+                            padding: '0 20px',
+                            textAlign: 'center'
+                          }}>
+                            <RefreshCw className="animate-spin text-secondary" size={24} />
+                            <span className="animate-pulse" style={{ fontFamily: 'var(--font-title)', fontSize: '0.95rem', fontWeight: 'bold' }}>
+                              밤별빛으로 도화지 채우는 중...
+                            </span>
+                            <span style={{ fontSize: '0.75rem', opacity: 0.8, maxWidth: '240px', lineHeight: '1.4' }}>
+                              처음 그리는 마법 그림은 약 15~30초가 소요됩니다 ✨
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ 
+                        width: '100%', height: '100%', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--color-text-secondary)', fontSize: '0.9rem' 
+                      }}>일러스트를 기획하지 못했습니다.</div>
+                    )}
+                  </div>
+
+                  {/* Bottom: Text area — 45% of card */}
+                  <div style={{
+                    flex: 1,
+                    padding: '12px 16px 8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    background: 'linear-gradient(180deg, #fffdf9, #fef9ef)',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      fontSize: '1.18rem',
+                      lineHeight: '1.5',
+                      color: '#333',
+                      fontFamily: 'var(--font-title)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'keep-all',
+                      overflowY: 'auto',
+                      flex: 1
+                    }}>
+                      {activePage.text}
+                    </div>
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: '#bbb',
+                      textAlign: 'center',
+                      paddingTop: '4px'
+                    }}>
+                      {currentPageIndex + 1}
+                    </div>
                   </div>
                 </div>
-
               </div>
 
-              {/* Book Page Turner Navigation */}
+
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1230,7 +1278,7 @@ if(!total){done();}else{imgs.forEach(i=>{const ck=()=>{loaded++;document.getElem
                     type="button"
                     className="audio-btn"
                     onClick={handlePrintBooklet}
-                    title="그림 동화책 출력 (A4 접어서 책자)"
+                    title="4×6 사진 크기로 동화책 출력"
                     style={{ width: '45px', height: '45px', borderRadius: '12px', background: 'rgba(167,139,250,0.15)', color: 'var(--color-primary)' }}
                   >
                     <Printer size={20} />
